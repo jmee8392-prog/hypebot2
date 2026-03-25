@@ -1,0 +1,370 @@
+# 🎯 HYPERLIQUID BOT - ONE-PAGE QUICK REFERENCE
+
+## SETUP PATH (Choose One)
+
+### 🔷 LAPTOP (Testing)
+```
+pip install -r requirements.txt
+cp .env.example .env        # Edit with your API keys
+python3 hyperliquid_trading_bot.py
+```
+**Best for:** Learning, testnet validation, day trading
+
+### 🌐 VPS (24/7 Recommended) - 15 MIN SETUP
+```
+1. Create DigitalOcean account (digitalocean.com)
+2. Create $5/month Ubuntu 22.04 droplet
+3. SSH: ssh root@YOUR_IP
+4. Upload files (scp command)
+5. nano .env       # Configure API keys
+6. pip install -r requirements.txt
+7. screen -S hyperliquid -d -m python3 hyperliquid_trading_bot.py
+8. Done! Bot runs 24/7
+```
+**Best for:** Automated trading while you sleep
+
+---
+
+## .ENV CONFIGURATION (What You Need To Fill In)
+
+```env
+# YOUR HYPERLIQUID CREDENTIALS (Get from https://app.hyperliquid.xyz/API)
+HYPERLIQUID_ACCOUNT=0xyour_wallet_address_here
+HYPERLIQUID_PRIVATE_KEY=your_private_key_here
+
+# TRADING PARAMETERS
+ACCOUNT_SIZE=10000                    # Start small
+MAX_LOSS_PER_TRADE=0.02              # 2% max loss
+MAX_LEVERAGE=3                       # 1x=no leverage, 3x=3x leverage
+SYMBOLS=BTC,ETH                      # What to trade
+TIMEFRAME_MINUTES=5                  # 1=scalp, 5=day, 60=swing
+CYCLE_INTERVAL=60                    # Check every 60 seconds
+
+# SAFETY FLAGS
+BACKTEST_MODE=true                   # ← Start HERE (no real trades)
+# Change to false when ready for real money
+
+# ADVANCED (Optional)
+MIN_CONFIRMATION_COUNT=3             # Need 3+ TA signals aligned
+MIN_RISK_REWARD_RATIO=1.5            # Minimum reward/risk
+```
+
+---
+
+## BOT LOGIC (How It Works)
+
+```
+Every 60 seconds:
+
+1. CHECK MACRO (Is environment favorable?)
+   ├─ Fed expanding or contracting?
+   ├─ Stablecoins flowing in/out?
+   ├─ Funding rates reasonable?
+   └─ Whales accumulating or distributing?
+
+2. ANALYZE TA (Are signals aligned?)
+   ├─ RSI oversold/overbought?
+   ├─ MACD bullish/bearish cross?
+   ├─ Uptrend/downtrend structure?
+   ├─ Bollinger Bands squeezed?
+   └─ Order flow bullish/bearish?
+
+3. COUNT CONFIRMATIONS
+   └─ If 3+ signals aligned → Generate signal
+   └─ If <3 signals → Skip trade (wait for better setup)
+
+4. VALIDATE RISK
+   ├─ Risk/Reward ≥ 1.5:1?
+   ├─ Position size OK?
+   └─ Leverage appropriate?
+
+5. EXECUTE
+   └─ Place order on Hyperliquid
+   └─ Set stop-loss & take-profit
+   └─ Log everything
+```
+
+---
+
+## QUICK COMMANDS (Copy/Paste)
+
+### Start Bot (Laptop)
+```bash
+python3 hyperliquid_trading_bot.py
+```
+
+### Start Bot (VPS - Background)
+```bash
+screen -S hyperliquid -d -m python3 hyperliquid_trading_bot.py
+```
+
+### Check Bot Output
+```bash
+tail -50 hyperliquid_bot.log      # Last 50 lines
+tail -f hyperliquid_bot.log       # Live (Ctrl+C to stop)
+```
+
+### Stop Bot
+```bash
+pkill -f hyperliquid_trading_bot  # Kill process
+```
+
+### Restart Bot
+```bash
+pkill -f hyperliquid_trading_bot && sleep 2 && python3 hyperliquid_trading_bot.py &
+```
+
+### Check if Running
+```bash
+ps aux | grep python
+```
+
+---
+
+## EXPECTED SIGNALS (What You'll See in Logs)
+
+### ✅ GOOD SIGNAL (Trade Happens)
+```
+[INFO] TRADE SIGNAL: BTC LONG
+Confidence: 75.8%
+Confirmations: 4 - ['RSI_OVERSOLD', 'MACD_BULLISH_CROSS', 'STRUCTURE_UPTREND', 'ORDERFLOW_BULLISH']
+Macro: BULLISH (Risk: NORMAL)
+Entry: $42,100 | SL: $40,900 | TP: $44,500
+Position Size: $1,250 | Leverage: 2.0x
+```
+
+### ❌ BAD SIGNAL (Skipped)
+```
+[DEBUG] BTC: Low confidence 0.45 - waiting
+[DEBUG] ETH: Neutral signal - waiting
+[WARNING] Macro risk CRITICAL - skipping trades
+```
+
+---
+
+## SCALING PLAN (Capital Growth)
+
+| Phase | Capital | Duration | Goal | Next |
+|-------|---------|----------|------|------|
+| **1** | 100% (paper) | 1 week | Validate signals | Phase 2 |
+| **2** | 10% real | 2 weeks | Prove profitability | Phase 3 |
+| **3** | 50% real | 2 weeks | Build confidence | Phase 4 |
+| **4** | 100% real | Forever | Compound gains | Scale VPS |
+
+---
+
+## TROUBLESHOOTING DECISION TREE
+
+```
+Bot not running?
+├─ Error message? → Check Python version (need 3.9+)
+├─ API key issue? → Regenerate on Hyperliquid
+└─ File missing? → Upload all files again
+
+Bot running but not trading?
+├─ Wrong BACKTEST_MODE? → Set to false for real trades
+├─ Macro too bearish? → Lower MIN_CONFIRMATION_COUNT
+├─ Low win rate (<55%)? → Raise MIN_CONFIRMATION_COUNT to 4
+└─ Too much slippage? → Use LIMIT orders, not market
+
+Bot losing money?
+├─ Analyze last 10 trades → What went wrong?
+├─ Check macro alignment → Were conditions favorable?
+├─ Check confirmations → Were they legit?
+└─ Reduce leverage → Try 1.0x instead of 3.0x
+
+VPS connection lost?
+└─ Bot keeps running! Just SSH back in and check logs
+```
+
+---
+
+## DAILY CHECKLIST (5 Minutes)
+
+```
+□ SSH into VPS: ssh root@YOUR_IP
+□ Check logs: tail -50 hyperliquid_bot.log
+□ Any errors? Fix immediately
+□ Trades executed today? (Count them)
+□ Win rate still >60%? Good
+□ Any unusual activity? Investigate
+```
+
+## WEEKLY CHECKLIST (15 Minutes)
+
+```
+□ Review all trades from week
+□ Calculate win rate (target: >60%)
+□ Biggest winner? Biggest loser?
+□ Did macro predictions align with reality?
+□ Adjust parameters if needed
+□ Backup your .env file
+```
+
+## MONTHLY CHECKLIST (30 Minutes)
+
+```
+□ Calculate total P&L for month
+□ Calculate average R:R achieved
+□ Update leverage if macro shifted
+□ Analyze drawdown vs reward
+□ Consider scaling capital if profitable
+□ Backtest new parameters for next month
+```
+
+---
+
+## MACRO INDICATORS TO MONITOR (Daily)
+
+| Indicator | Good Sign | Bad Sign | How Often Check |
+|-----------|-----------|----------|-----------------|
+| Fed Balance Sheet | Expanding | Contracting | Daily |
+| Stablecoin Inflows | >$1.5B/week | <$500M/week | Daily |
+| BTC ETF Flows | +$150M/day | -$100M/day | Daily |
+| Funding Rates | Negative | Extremely positive | Daily |
+| Exchange Inflows | Low/stable | Rising fast | Daily |
+| LTH Accumulation | Rising | Declining | Weekly |
+| Fear & Greed | <40 or >80 | 40-80 neutral | Daily |
+| News Sentiment | Bullish | Bearish | As needed |
+
+→ Print `MACRO_DASHBOARD.md` and fill out daily!
+
+---
+
+## RISK RULES (NEVER BREAK THESE)
+
+```
+✓ ALWAYS use stop losses
+✓ ALWAYS respect 2% max loss per trade
+✓ ALWAYS require 1.5:1+ risk/reward
+✓ ALWAYS start with 10% capital first
+✓ ALWAYS confirm macro before trading
+✓ ALWAYS wait for 3+ confirmations
+
+✗ NEVER override a stop loss
+✗ NEVER trade without SL set
+✗ NEVER risk more than 2% per trade
+✗ NEVER ignore macro environment
+✗ NEVER trade on single indicator
+✗ NEVER scale before proving profitability
+```
+
+---
+
+## VPS MAINTENANCE (Monthly)
+
+```bash
+# Check disk space
+df -h
+
+# Check memory
+free -h
+
+# Check bot process
+ps aux | grep python
+
+# View recent logs
+journalctl -u hyperliquid -n 50  # if using systemd
+
+# Restart bot
+systemctl restart hyperliquid     # if using systemd
+
+# Update bot code
+git pull
+systemctl restart hyperliquid
+```
+
+---
+
+## FILES EXPLAINED
+
+| File | Purpose | When to Read |
+|------|---------|--------------|
+| `README.md` | Overview & roadmap | First (you are here) |
+| `VPS_SETUP_README.md` | Cloud setup guide | If using VPS |
+| `QUICKSTART.md` | Step-by-step | First time setup |
+| `BOT_CONFIG_GUIDE.md` | Deep technical | Learning phase |
+| `MACRO_DASHBOARD.md` | Daily checklist | Print & use daily |
+| `hyperliquid_trading_bot.py` | Actual code | Reference |
+| `requirements.txt` | Dependencies | Auto-install |
+| `.env.example` | Config template | Copy → edit |
+
+---
+
+## REAL-WORLD EXAMPLE
+
+```
+Your account: $10,000
+Today: BTC drops to $40,000
+
+Bot Analysis:
+✓ RSI: 28 (oversold)
+✓ MACD: Bullish cross
+✓ Structure: Higher lows
+✓ Stablecoins: $2B flowing in
+✓ Fed: Expanding
+
+→ 5 confirmations! LONG signal
+→ Confidence: 80%
+→ Macro: BULLISH
+
+Position Setup:
+Entry:    $40,000
+Stop:     $39,000 (risk $1,000)
+Target:   $42,000 (reward $2,000)
+Ratio:    2.0:1 (Good!)
+Size:     $5,000 (risking 1% of account)
+Leverage: 2.0x
+
+Outcome A (Win):
+→ Hits $42,000 TP
+→ +$2,000 profit (20% return on $10K)
+→ Account: $12,000
+
+Outcome B (Loss):
+→ Hits $39,000 SL
+→ -$1,000 loss (10% of account)
+→ Account: $9,000
+→ Move to next trade, don't dwell
+```
+
+---
+
+## REALISTIC FIRST MONTH
+
+**Week 1:** Setup, learning, validating  
+**Week 2:** First trades, adjusting parameters  
+**Week 3:** Consistent signals, building confidence  
+**Week 4:** 50-60 trades, $200-500 profit (2-5%)  
+
+**If profitable:** Scale to 50% capital next month  
+**If not:** Analyze what went wrong, adjust, try again  
+
+---
+
+## CONTACT & RESOURCES
+
+**Hyperliquid API:** https://hyperliquid.gitbook.io  
+**Testnet:** https://testnet.hyperliquid.xyz  
+**Fear & Greed:** https://alternative.me/crypto/fear-and-greed-index  
+**FRED Data:** https://fred.stlouisfed.org  
+**Glassnode:** https://glassnode.com  
+
+---
+
+## YOU'RE READY ✅
+
+```
+✓ Bot installed
+✓ API keys configured
+✓ Risk parameters set
+✓ Ready to test
+
+NEXT STEP: Read VPS_SETUP_README.md or QUICKSTART.md
+```
+
+---
+
+**Print this page. Keep it next to your monitor.**
+
+**Good luck. Trade smart. May your confirmations be plentiful and your stops be tight.** 🚀

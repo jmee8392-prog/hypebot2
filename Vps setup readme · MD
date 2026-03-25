@@ -1,0 +1,541 @@
+# 🚀 HYPERLIQUID BOT ON VPS - DEAD SIMPLE GUIDE
+
+**Goal:** Get your bot running 24/7 on a cloud VPS in 15 minutes.
+
+**Why VPS?** Your bot runs even if your laptop is off. Perfect for perpetual trading.
+
+---
+
+## PART 1: CHOOSE & SET UP YOUR VPS (5 minutes)
+
+### Recommended VPS Providers
+
+Pick ONE (all work equally fine):
+
+| Provider | Price | Location | Why |
+|----------|-------|----------|-----|
+| **DigitalOcean** | $5/month | Global | Easiest, best docs |
+| **Vultr** | $6/month | Global | Fast, reliable |
+| **Linode** | $5/month | Global | Good support |
+| **AWS** | $10/month | Global | Industry standard |
+| **Hetzner** | €3/month | EU-based | Cheapest, solid |
+
+**Recommendation:** Start with **DigitalOcean**. Easiest UX.
+
+### Step 1: Create VPS Account
+
+1. Go to https://www.digitalocean.com
+2. Sign up (use email)
+3. Add payment method (credit card)
+4. Click **"Create"** → **"Droplets"**
+
+### Step 2: Configure Your Droplet
+
+**Size:** Pick the **$5/month (512 MB RAM)** option. That's plenty.
+
+**OS:** Select **Ubuntu 22.04 LTS** (most stable)
+
+**Region:** Pick closest to you (doesn't matter much)
+
+**Authentication:** 
+- [ ] **SSH Keys** (recommended, more secure)
+- [ ] **Password** (easier for beginners)
+
+→ **Choose Password for now** (we'll explain SSH later if needed)
+
+**Finalize:** Click **"Create Droplet"**
+
+Wait 30 seconds. You'll get an IP address like: `123.45.67.89`
+
+---
+
+## PART 2: LOG INTO YOUR VPS (2 minutes)
+
+### On Mac/Linux:
+
+```bash
+ssh root@123.45.67.89
+# Replace 123.45.67.89 with YOUR IP address
+# It will ask: "Are you sure?" → Type: yes
+# Password: Use the password from your email
+```
+
+### On Windows:
+
+Download **PuTTY**: https://www.putty.org/
+
+1. Launch PuTTY
+2. Host Name: `123.45.67.89`
+3. Click **"Open"**
+4. Login: `root`
+5. Password: Paste from email (right-click to paste)
+
+---
+
+## PART 3: INSTALL EVERYTHING (5 minutes)
+
+You're now inside your VPS terminal. Copy-paste these commands ONE AT A TIME:
+
+### Step 1: Update System
+
+```bash
+apt update && apt upgrade -y
+```
+
+Wait for it to finish (1-2 minutes). Shows lots of text.
+
+### Step 2: Install Python & Tools
+
+```bash
+apt install -y python3 python3-pip python3-venv git nano
+```
+
+This installs Python, pip (package manager), and git.
+
+### Step 3: Create Bot Folder
+
+```bash
+mkdir -p /home/hyperliquid-bot
+cd /home/hyperliquid-bot
+```
+
+---
+
+## PART 4: COPY BOT FILES TO VPS (3 minutes)
+
+You have two options:
+
+### OPTION A: Upload Files Using SCP (Easiest)
+
+**From your laptop (NOT in VPS terminal), open a NEW terminal:**
+
+```bash
+# Navigate to folder with your bot files
+cd ~/your-bot-folder
+
+# Copy all files to VPS
+scp hyperliquid_trading_bot.py root@123.45.67.89:/home/hyperliquid-bot/
+scp requirements.txt root@123.45.67.89:/home/hyperliquid-bot/
+scp BOT_CONFIG_GUIDE.md root@123.45.67.89:/home/hyperliquid-bot/
+scp QUICKSTART.md root@123.45.67.89:/home/hyperliquid-bot/
+scp MACRO_DASHBOARD.md root@123.45.67.89:/home/hyperliquid-bot/
+scp .env.example root@123.45.67.89:/home/hyperliquid-bot/
+
+# Replace 123.45.67.89 with your actual IP
+# It will ask for password → paste it
+```
+
+### OPTION B: Clone from GitHub (If Uploaded There)
+
+**Back in VPS terminal:**
+
+```bash
+cd /home/hyperliquid-bot
+git clone https://github.com/YOUR-USERNAME/hyperliquid-bot.git .
+# (only if you've pushed files to GitHub)
+```
+
+---
+
+## PART 5: CONFIGURE BOT (2 minutes)
+
+**Back in VPS terminal:**
+
+```bash
+cd /home/hyperliquid-bot
+```
+
+### Create .env File (Your Secret Config)
+
+```bash
+nano .env
+```
+
+This opens a text editor. Copy-paste this template:
+
+```
+HYPERLIQUID_ACCOUNT=0xyourwalletaddresshere
+HYPERLIQUID_PRIVATE_KEY=yourapikeyhere
+HYPERLIQUID_API_URL=https://api.hyperliquid.xyz
+ACCOUNT_SIZE=10000
+MAX_LOSS_PER_TRADE=0.02
+MAX_LEVERAGE=3
+SYMBOLS=BTC,ETH
+TIMEFRAME_MINUTES=5
+CYCLE_INTERVAL=60
+BACKTEST_MODE=true
+LOG_LEVEL=INFO
+```
+
+**Fill in your actual credentials:**
+- `HYPERLIQUID_ACCOUNT`: Your wallet address from Hyperliquid
+- `HYPERLIQUID_PRIVATE_KEY`: Your API private key
+
+**Save & Exit:**
+- Press `Ctrl+X`
+- Press `Y` (yes, save)
+- Press `Enter` (confirm filename)
+
+---
+
+## PART 6: INSTALL PYTHON DEPENDENCIES (2 minutes)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+This creates a virtual environment and installs packages.
+
+You'll see lots of text downloading packages. That's normal. Takes ~1-2 minutes.
+
+---
+
+## PART 7: TEST THE BOT (1 minute)
+
+```bash
+python3 hyperliquid_trading_bot.py
+```
+
+You should see:
+
+```
+[INFO] HyperliquidTradingBot initialized
+[INFO] Bot starting main loop
+[INFO] Running bot in demo mode (single cycle)
+[INFO] Macro Regime: BULLISH | Risk Level: NORMAL
+...
+[INFO] Performance Summary:
+  total_trades: 0
+```
+
+**Good sign!** No errors = bot works.
+
+Press `Ctrl+C` to stop.
+
+---
+
+## PART 8: RUN BOT IN BACKGROUND (Forever) - IMPORTANT!
+
+The bot needs to run 24/7. If you close the terminal, it stops.
+
+**Solution:** Use **`screen`** (terminal multiplexer) or **`systemd`** (service manager).
+
+### EASIEST: Use screen (Recommended)
+
+```bash
+# Start bot in background session
+screen -S hyperliquid -d -m python3 hyperliquid_trading_bot.py
+
+# Verify it's running
+screen -ls
+# Should show: "hyperliquid (Detached)"
+```
+
+**To check bot output:**
+
+```bash
+screen -r hyperliquid
+# Shows bot logs
+
+# To exit logs (but keep bot running):
+# Press Ctrl+A then D
+```
+
+**To stop bot:**
+
+```bash
+screen -S hyperliquid -X quit
+```
+
+---
+
+### ADVANCED: Use systemd (Auto-restart on Crash)
+
+Create a service file:
+
+```bash
+nano /etc/systemd/system/hyperliquid.service
+```
+
+Paste this:
+
+```ini
+[Unit]
+Description=Hyperliquid Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/hyperliquid-bot
+Environment="PATH=/home/hyperliquid-bot/venv/bin"
+ExecStart=/home/hyperliquid-bot/venv/bin/python3 hyperliquid_trading_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save: `Ctrl+X` → `Y` → `Enter`
+
+**Enable the service:**
+
+```bash
+systemctl daemon-reload
+systemctl enable hyperliquid
+systemctl start hyperliquid
+```
+
+**Check status:**
+
+```bash
+systemctl status hyperliquid
+```
+
+**View logs:**
+
+```bash
+journalctl -u hyperliquid -f
+# -f means "follow" (live updates)
+```
+
+**Stop bot:**
+
+```bash
+systemctl stop hyperliquid
+```
+
+---
+
+## PART 9: MONITOR BOT REMOTELY
+
+### Check Bot is Still Running
+
+**From your laptop:**
+
+```bash
+# SSH into VPS
+ssh root@123.45.67.89
+
+# Check logs
+tail -50 /home/hyperliquid-bot/hyperliquid_bot.log
+
+# OR if using systemd:
+journalctl -u hyperliquid -f
+```
+
+### Set Up Daily Alerts (Optional)
+
+Add this to your crontab to email you daily stats:
+
+```bash
+crontab -e
+```
+
+Add:
+
+```
+0 9 * * * tail -100 /home/hyperliquid-bot/hyperliquid_bot.log | mail -s "Bot Daily Report" your@email.com
+```
+
+---
+
+## PART 10: TROUBLESHOOTING
+
+### Bot Not Running?
+
+```bash
+# Check if process exists
+ps aux | grep python
+
+# Restart bot
+screen -S hyperliquid -X quit
+screen -S hyperliquid -d -m python3 hyperliquid_trading_bot.py
+```
+
+### Bot Crashed?
+
+```bash
+# Check recent logs
+tail -100 /home/hyperliquid-bot/hyperliquid_bot.log | grep ERROR
+
+# Restart
+systemctl restart hyperliquid
+```
+
+### Out of Memory?
+
+```bash
+# Check memory usage
+free -h
+
+# If low, restart VPS
+reboot
+```
+
+### VPS Disconnected?
+
+That's fine. Bot keeps running. Just SSH back in when you reconnect.
+
+---
+
+## PART 11: BACKUP YOUR CONFIG (IMPORTANT!)
+
+**Your `.env` file has your private key. Protect it:**
+
+### Download Backup to Laptop
+
+```bash
+# On your laptop:
+scp root@123.45.67.89:/home/hyperliquid-bot/.env ~/hyperliquid-bot-backup/.env
+```
+
+**Store this somewhere safe** (encrypted drive, password manager).
+
+---
+
+## QUICK REFERENCE: Common Commands
+
+```bash
+# SSH into VPS
+ssh root@123.45.67.89
+
+# Navigate to bot folder
+cd /home/hyperliquid-bot
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Start bot in background (screen method)
+screen -S hyperliquid -d -m python3 hyperliquid_trading_bot.py
+
+# View bot output
+screen -r hyperliquid
+
+# Exit bot output (keep running)
+Ctrl+A then D
+
+# Stop bot
+screen -S hyperliquid -X quit
+
+# View logs
+tail -50 hyperliquid_bot.log
+
+# Real-time logs
+tail -f hyperliquid_bot.log
+
+# Check if bot is running
+ps aux | grep python
+
+# Restart bot
+pkill python3 && sleep 2 && python3 hyperliquid_trading_bot.py &
+
+# Update bot code
+git pull
+
+# Restart bot with new code
+systemctl restart hyperliquid
+```
+
+---
+
+## PART 12: UPGRADE YOUR SETUP (Later)
+
+Once bot is running 1+ month, consider:
+
+- [ ] **Upgrade VPS to 1GB RAM** ($12/month) for faster processing
+- [ ] **Add monitoring** with Uptime Robot (free) - alerts if VPS goes down
+- [ ] **Set up auto-restart** (systemd does this)
+- [ ] **Add Slack/Discord alerts** for trades
+- [ ] **Use SSH keys instead of password** (more secure)
+
+---
+
+## ESTIMATED COSTS
+
+| Item | Cost | Notes |
+|------|------|-------|
+| VPS | $5-10/month | DigitalOcean, Vultr, Linode |
+| Domain (optional) | $1-15/year | If you want easy IP management |
+| Extra backups | Free | GitHub private repo |
+| Monitoring (optional) | Free-$50/month | Uptime Robot, Datadog |
+| **TOTAL** | **~$5-10/month** | Less than 1 winning trade |
+
+---
+
+## SECURITY BEST PRACTICES
+
+✅ **DO:**
+- [ ] Use a strong VPS password (20+ chars, mixed case + numbers)
+- [ ] Rotate API keys monthly
+- [ ] Keep `.env` file private (never commit to git)
+- [ ] Backup `.env` to encrypted drive
+- [ ] Use SSH keys instead of passwords (later upgrade)
+- [ ] Enable VPS firewall (only allow your IP)
+
+❌ **DON'T:**
+- [ ] Share your private key with ANYONE
+- [ ] Upload `.env` to GitHub
+- [ ] Use weak passwords
+- [ ] Leave VPS idle without monitoring
+
+---
+
+## SUPPORT CHECKLIST
+
+Before asking for help, verify:
+
+- [ ] VPS is running (check status on provider dashboard)
+- [ ] SSH connection works
+- [ ] Python 3.9+ installed: `python3 --version`
+- [ ] Bot files present: `ls -la /home/hyperliquid-bot/`
+- [ ] Dependencies installed: `pip list | grep pandas`
+- [ ] `.env` file configured correctly (check with `cat .env`)
+- [ ] Bot runs without errors: `python3 hyperliquid_trading_bot.py`
+- [ ] Screen/systemd is running bot: `ps aux | grep python`
+- [ ] Logs show activity: `tail -f hyperliquid_bot.log`
+
+---
+
+## NEXT STEPS
+
+1. ✅ Create VPS ($5/month)
+2. ✅ Upload bot files
+3. ✅ Configure `.env`
+4. ✅ Install dependencies
+5. ✅ Test bot locally
+6. ✅ Start bot with screen/systemd
+7. ✅ Verify logs show trades
+8. ✅ Monitor daily for 1 week
+9. ✅ Increase capital if profitable
+
+---
+
+## YOU'RE DONE! 🎉
+
+Your bot is now running 24/7 on a VPS. It trades while you sleep.
+
+**Final Checklist:**
+- [ ] VPS created and running
+- [ ] Bot files uploaded
+- [ ] `.env` configured with your credentials
+- [ ] Dependencies installed
+- [ ] Bot running in background (screen or systemd)
+- [ ] Logs showing bot activity
+- [ ] `.env` backed up to laptop
+
+**Next:** Check logs daily. Review trades weekly. Scale capital as profits grow.
+
+---
+
+**Questions?** Check `QUICKSTART.md` and `BOT_CONFIG_GUIDE.md` for detailed explanations.
+
+**Happy trading. May your stops be tight and your confirmations be plentiful.**
+
+---
+
+*Last Updated: March 2026*
+*VPS Setup Guide v1.0*

@@ -1,0 +1,403 @@
+# MACRO MONITORING DASHBOARD
+## Daily Reference Sheet for Hyperliquid Trading Bot
+
+**Purpose:** Quick visual reference of macro conditions affecting crypto markets.  
+**Update Frequency:** Daily (09:00 AM ET) and before major trades  
+**Data Sources:** FRED, CoinShares, Glassnode, Trading Economics, Reuters
+
+---
+
+## TODAY'S MACRO SNAPSHOT
+
+```
+Date: ________________
+Time: 09:00 AM ET
+
+OVERALL REGIME: [ ] STRONG BULLISH  [ ] BULLISH  [ ] NEUTRAL  [ ] BEARISH  [ ] STRONG BEARISH
+RISK LEVEL:     [ ] LOW             [ ] NORMAL   [ ] MEDIUM   [ ] HIGH     [ ] CRITICAL
+
+Recommended Leverage: ____x
+Trading Bias: [ ] LONG  [ ] SHORT  [ ] NEUTRAL
+```
+
+---
+
+## LIQUIDITY INDICATORS CHECKLIST
+
+### 1. FED BALANCE SHEET (QE/QT STATUS)
+
+**Check:** https://fred.stlouisfed.org/series/WALCL
+
+```
+Fed Balance Sheet Size: $ _____________ Trillion
+vs. Last Week:         [ ] EXPANDING  [ ] FLAT  [ ] CONTRACTING
+vs. 12-Month Avg:      [ ] Above      [ ] Below
+
+Interpretation:
+□ Expansion (QE) = Positive for risk assets, LONG bias
+□ Contraction (QT) = Negative for risk assets, SHORT bias
+□ Flat = Neutral
+```
+
+**Action:** __________________________________________
+
+---
+
+### 2. STABLECOIN EXCHANGE INFLOWS (7-day avg)
+
+**Check:** Glassnode, WhaleAlert, or TradeView
+
+```
+USDC/USDT Inflows (7d avg): $ _____________ Million
+Trend vs. 30d avg:           [ ] INCREASING  [ ] FLAT  [ ] DECREASING
+
+Historical Context:
+□ >$1.5B = Dry powder accumulating, BULLISH
+□ $0.8-1.5B = Normal distribution
+□ <$0.5B = Capital deployed, less cash on sidelines
+```
+
+**Signal:** __________________________________________
+
+---
+
+### 3. SPOT BTC ETF FLOWS (7-day avg)
+
+**Check:** CoinShares, Farside Investors, ETF Flow Tracker
+
+```
+Net BTC ETF Flows (7d):  $ _____________ Million
+Largest ETF Flows:       ________________ (BlackRock IBIT most important)
+
+Signal:
+□ >+$100M/day = Strong institutional buying, BULLISH
+□ +$50M to +$100M = Moderate inflow, slightly bullish
+□ -$50M to +$50M = Neutral, distribution phase
+□ <-$100M/day = Institutional selling, BEARISH
+```
+
+**Conclusion:** __________________________________________
+
+---
+
+### 4. PERPETUAL FUTURES FUNDING RATES
+
+**Check:** Hyperliquid, Binance Futures, or Bybit
+
+```
+BTC 8-Hour Funding Rate:   ________%
+ETH 8-Hour Funding Rate:   ________%
+Open Interest (BTC):       _________ Billion USD
+
+Interpretation:
+□ +0.10%+ = VERY bullish (shorts paying longs heavily)
+□ +0.05% = Moderately bullish
+□ 0% = Neutral
+□ -0.05% = Moderately bearish
+□ -0.10%+ = VERY bearish (longs liquidating)
+
+Extreme Rates = Liquidation cascade risk within 24-48 hours
+```
+
+**Risk Assessment:** __________________________________________
+
+---
+
+### 5. ON-CHAIN METRICS (Daily Update)
+
+### A) Exchange Inflows vs Outflows
+
+```
+Exchange Inflows (24h):   _________ BTC
+Exchange Outflows (24h):  _________ BTC
+Net Flow:                 _________ BTC
+
+Interpretation:
+□ Large inflows = Distribution phase, sellers active, BEARISH
+□ Large outflows = Accumulation phase, holders active, BULLISH
+□ Balanced = Neutral
+```
+
+### B) Long-Term Holder Accumulation
+
+```
+LTH Holding %: ________%
+Trend: [ ] ACCUMULATING  [ ] FLAT  [ ] DISTRIBUTING
+
+□ >60% = Strong conviction, bullish
+□ 45-60% = Normal range
+□ <45% = Heavy selling, bearish
+```
+
+### C) Whale (100+ BTC) Holdings
+
+```
+Total Whale Holdings: _________ Million BTC
+Trend vs. 30 days:    [ ] UP  [ ] FLAT  [ ] DOWN
+
+□ Whales accumulating = Institutional interest rising
+□ Whales distributing = Caution, major players reducing exposure
+```
+
+---
+
+### 6. MACRO ECONOMIC CALENDAR
+
+**Check:** Trading Economics, FRED, US Treasury
+
+```
+Date        Event               Expected    Actual    Impact
+________    ____________        ________    ________  ________
+________    ____________        ________    ________  ________
+________    ____________        ________    ________  ________
+
+□ CPI Coming (inflation indicator) - Typically high volatility
+□ Jobs Report Coming - Mixed effect (more jobs = maybe no rate cuts)
+□ Fed Decision Coming - Critical for crypto direction
+□ GDP Report Coming - Growth indicator
+
+High-impact events = Consider reducing leverage 24 hours before
+```
+
+---
+
+### 7. SENTIMENT INDICATORS
+
+```
+Fear & Greed Index: _______/100
+
+□ 0-20 (Extreme Fear)     = Capitulation, potential bottom, LONG setup
+□ 21-40 (Fear)            = Risk-off, caution
+□ 41-60 (Neutral)         = Balanced, no directional bias
+□ 61-80 (Greed)           = Risk-on, overbought risk
+□ 81-100 (Extreme Greed)  = Euphoria, potential top, SHORT setup
+
+Funding Rate Sentiment:
+□ Extremely Positive (longs over-leveraged) = SHORT bias
+□ Slightly Positive = LONG more caution
+□ Neutral = No extreme positioning
+□ Slightly Negative = SHORT more caution
+□ Extremely Negative = LONG bias (shorts stressed)
+
+News Sentiment (This Week):
+□ Mostly Positive News = BULLISH backdrop
+□ Neutral / Balanced = No edge
+□ Mostly Negative News = BEARISH backdrop
+```
+
+---
+
+## REGULATORY & GEOPOLITICAL RISK
+
+```
+Recent Major News (Last 7 Days):
+______________________________________________________________________
+______________________________________________________________________
+______________________________________________________________________
+
+Risk Level: [ ] LOW  [ ] MEDIUM  [ ] HIGH  [ ] CRITICAL
+
+Key Risks to Monitor:
+□ SEC regulatory changes
+□ Congressional action
+□ International regulation (EU MiCA, Hong Kong, Asia)
+□ Geopolitical escalation (US-China, Middle East)
+□ Central bank policy surprises
+
+Action Required: _________________________________________________
+```
+
+---
+
+## MACRO ASSESSMENT SUMMARY
+
+### Bullish Signals Count:
+- [ ] Fed expanding balance sheet
+- [ ] Stablecoin inflows strong (>$1.5B)
+- [ ] BTC ETF positive flows
+- [ ] Funding rates negative (shorts stressed)
+- [ ] Exchange outflows (accumulation)
+- [ ] LTH accumulation rising
+- [ ] Whale buying
+- [ ] Fear & Greed Index < 40
+- [ ] Positive news sentiment
+
+**TOTAL: _____ / 9**
+
+### Bearish Signals Count:
+- [ ] Fed contracting balance sheet
+- [ ] Stablecoin outflows large (>$1.5B)
+- [ ] BTC ETF negative flows
+- [ ] Funding rates extremely positive (longs over-leveraged)
+- [ ] Exchange inflows (distribution)
+- [ ] LTH distributing
+- [ ] Whale selling
+- [ ] Fear & Greed Index > 80
+- [ ] Negative news sentiment
+
+**TOTAL: _____ / 9**
+
+---
+
+## FINAL MACRO DECISION
+
+```
+Bullish Signals: ___/9
+Bearish Signals: ___/9
+
+MACRO REGIME DETERMINATION:
+□ STRONG BULLISH (7+ bullish signals, 0-2 bearish)
+    → Leverage: 2.5-3.0x | LONG bias | Trade size: FULL
+    
+□ BULLISH (5-6 bullish signals, 2-3 bearish)
+    → Leverage: 2.0x | LONG bias | Trade size: 75%
+    
+□ NEUTRAL (3-4 bullish, 3-4 bearish, OR mixed signals)
+    → Leverage: 1.0x | Bi-directional | Trade size: 50%
+    
+□ BEARISH (2-3 bullish signals, 5-6 bearish)
+    → Leverage: 2.0x | SHORT bias | Trade size: 75%
+    
+□ STRONG BEARISH (0-2 bullish signals, 7+ bearish)
+    → Leverage: 2.5-3.0x | SHORT bias | Trade size: FULL
+
+RISK ASSESSMENT:
+□ CRITICAL (3+ warning signals) → Reduce all leverage 50%, consider pause
+□ HIGH (2 warning signals) → Reduce leverage 25%
+□ NORMAL (0-1 warning signals) → Proceed as normal
+```
+
+---
+
+## DAILY TRADING ADJUSTMENTS
+
+Based on macro assessment, adjust bot parameters:
+
+```python
+# In .env or config file:
+
+If STRONG BULLISH regime:
+    MAX_LEVERAGE = 3.0
+    LONG_BIAS_PREFERENCE = 1.2  # 20% more LONG signals
+    TRADE_SIZE_MULTIPLIER = 1.0
+    
+If BULLISH regime:
+    MAX_LEVERAGE = 2.0
+    LONG_BIAS_PREFERENCE = 1.1  # 10% more LONG signals
+    TRADE_SIZE_MULTIPLIER = 0.75
+    
+If NEUTRAL regime:
+    MAX_LEVERAGE = 1.0
+    LONG_BIAS_PREFERENCE = 1.0  # No bias
+    TRADE_SIZE_MULTIPLIER = 0.50
+    
+If BEARISH regime:
+    MAX_LEVERAGE = 2.0
+    SHORT_BIAS_PREFERENCE = 1.1
+    TRADE_SIZE_MULTIPLIER = 0.75
+    
+If STRONG BEARISH regime:
+    MAX_LEVERAGE = 3.0
+    SHORT_BIAS_PREFERENCE = 1.2
+    TRADE_SIZE_MULTIPLIER = 1.0
+    
+If CRITICAL RISK:
+    PAUSE_TRADING = true
+    Close all positions immediately
+```
+
+---
+
+## WEEK-OVER-WEEK COMPARISON
+
+```
+Metric                    Last Week    This Week    Change
+────────────────────────────────────────────────────────────
+Fed Balance Sheet         $ __T       $ __T        [ ] ↑ [ ] → [ ] ↓
+Stablecoin Inflows        $ __M       $ __M        [ ] ↑ [ ] → [ ] ↓
+BTC ETF Flows            $ __M        $ __M        [ ] ↑ [ ] → [ ] ↓
+Funding Rate             __%          __%          [ ] ↑ [ ] → [ ] ↓
+Fear & Greed Index       __/100       __/100       [ ] ↑ [ ] → [ ] ↓
+Exchange Inflows (BTC)   ___          ___          [ ] ↑ [ ] → [ ] ↓
+
+Trend: ________________________________________________________________
+```
+
+---
+
+## NOTES & OBSERVATIONS
+
+```
+Unusual Activity This Week:
+________________________________________________________________
+________________________________________________________________
+
+Macro Forecast (Next 7 Days):
+________________________________________________________________
+________________________________________________________________
+
+Adjustments Made to Bot:
+________________________________________________________________
+________________________________________________________________
+
+Results (End of Week):
+Win Rate: ____% | Trades: ____ | Largest Winner: $ ____
+Largest Loser: $ ____ | Total P&L: $ ____
+```
+
+---
+
+## QUICK REFERENCE: WHAT TO MONITOR DAILY
+
+**09:00 AM ET (Before Trading Starts):**
+- [ ] Fed balance sheet (any new QE/QT announcements?)
+- [ ] Overnight stablecoin flows
+- [ ] BTC ETF flows from Asia/Europe
+- [ ] Funding rates (any extremes?)
+- [ ] Fear & Greed Index
+- [ ] Major news from past 24 hours
+
+**12:00 PM ET (Mid-Day Check):**
+- [ ] Any regulatory news?
+- [ ] Any major liquidations?
+- [ ] Sentiment changes?
+
+**04:00 PM ET (Before Market Close):**
+- [ ] Weekly close setup (good trade territory?)
+- [ ] Any weekend risk factors?
+- [ ] Position review (close any weak trades?)
+
+**Before Bed:**
+- [ ] Tomorrow's economic calendar
+- [ ] Any geopolitical developments?
+- [ ] Bot performance today
+
+---
+
+## EMERGENCY CONTACTS & RESOURCES
+
+**If Markets Crash:**
+1. Check FRED for emergency Fed action (QE restart?)
+2. Monitor Hyperliquid status page
+3. Review your positions and stop-loss levels
+4. Consider closing weak trades, holding strong ones
+5. Check macro news (what caused the crash?)
+
+**Useful Links:**
+- FRED Data: https://fred.stlouisfed.org
+- CoinShares ETF Flows: https://www.coinsharesgroup.com/
+- Glassnode Dashboard: https://glassnode.com
+- Fear & Greed Index: https://alternative.me/crypto/fear-and-greed-index/
+- Hyperliquid Status: https://status.hyperliquid.xyz
+- Economic Calendar: https://tradingeconomics.com/calendar
+
+---
+
+**Last Updated:** _______________  
+**Reviewed By:** ________________  
+**Next Review:** ________________
+
+---
+
+*Print this page and fill it out daily. Keep a binder of weekly reviews to spot patterns.*  
+*Macro understanding is the difference between consistent profit and lucky streaks.*

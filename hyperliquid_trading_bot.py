@@ -852,8 +852,10 @@ class HyperliquidExecutor:
         return self.place_order(symbol, side, size, limit_price=price, reduce_only=True)
 
     def get_account_state(self) -> Dict:
-        """Fetch account balance and open positions via POST (Hyperliquid uses POST for info)"""
+        """Fetch account balance and open positions via POST.
+        For testnet unified accounts, checks both perps and spot clearinghouses."""
         try:
+            # Perps clearinghouse
             resp = self.session.post(
                 f"{self.base_url}/info",
                 json={
@@ -862,12 +864,31 @@ class HyperliquidExecutor:
                 },
                 timeout=10
             )
+            state = {}
             if resp.status_code == 200:
                 state = resp.json()
-                return state
-            else:
-                logger.error(f"Account fetch failed: {resp.status_code}")
-                return {}
+
+            # For unified accounts (testnet), also check spot balance
+            if self.is_testnet:
+                spot_resp = self.session.post(
+                    f"{self.base_url}/info",
+                    json={
+                        'type': 'spotClearinghouseState',
+                        'user': self.account_address
+                    },
+                    timeout=10
+                )
+                if spot_resp.status_code == 200:
+                    spot_state = spot_resp.json()
+                    state['spotBalances'] = spot_state.get('balances', [])
+                    # Calculate total spot USDC
+                    usdc_balance = 0.0
+                    for bal in spot_state.get('balances', []):
+                        if bal.get('coin') == 'USDC':
+                            usdc_balance = float(bal.get('total', 0))
+                    state['spotUsdcBalance'] = usdc_balance
+
+            return state
         except Exception as e:
             logger.error(f"Account fetch exception: {e}")
             return {}
@@ -1213,8 +1234,15 @@ def main():
     state = bot.executor.get_account_state()
     if state:
         margin = state.get('marginSummary', {})
-        acct_value = float(margin.get('accountValue', 0))
-        logger.info(f"Account Value: ${acct_value:,.2f}")
+        perps_value = float(margin.get('accountValue', 0))
+        spot_usdc = state.get('spotUsdcBalance', 0)
+        
+        logger.info(f"Perps Account Value: ${perps_value:,.2f}")
+        if spot_usdc > 0:
+            logger.info(f"Spot USDC Balance: ${spot_usdc:,.2f}")
+            logger.info(f"NOTE: Transfer USDC from spot to perps to trade. "
+                       f"Go to testnet.hyperliquid.xyz -> Portfolio -> Transfer")
+        
         positions = [p for p in state.get('assetPositions', []) 
                      if float(p.get('position', {}).get('szi', 0)) != 0]
         if positions:
@@ -1223,7 +1251,7 @@ def main():
                 pos = p['position']
                 logger.info(f"  {pos['coin']}: {pos['szi']} @ {pos.get('entryPx', 'N/A')}")
         else:
-            logger.info("No open positions")
+            logger.info("No open perps positions")
     
     logger.info("\nRunning single cycle...")
     bot._cycle()

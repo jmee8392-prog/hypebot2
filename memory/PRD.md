@@ -24,6 +24,12 @@ User has a Hyperliquid trading bot. Requested:
 - [x] Fixed test file paths (were pointing to `/tmp/cc-agent/...`)
 - [x] Updated `.gitignore`
 - [x] Rewrote README.md with accurate status, simulation results, pm2 guide
+- [x] Integrated hyperliquid-python-sdk (EIP-712 signing, real candle fetching)
+- [x] Fixed all 5 critical bugs (price feed, SDK auth, entry price, SHORT TP, POST for account state)
+- [x] Fixed high bugs (structure detection, funding rate logic, close_position)
+- [x] Added per-symbol TA engines
+- [x] Added unified account spot+perps balance detection for testnet
+- [x] Confirmed live testnet connection - sees $996.53 USDC in spot
 
 ## Simulation Results
 - 98.7% of scenarios produced NEUTRAL (no trade)

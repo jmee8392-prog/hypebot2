@@ -217,6 +217,59 @@ class HighConfirmationTA:
         
         return np.mean(tr_values)
 
+    def is_volatility_expanding(self, period: int = 14) -> Tuple[bool, float]:
+        """
+        Check if ATR is expanding (current ATR > recent average ATR).
+        Expanding volatility = better trending conditions = higher win rate.
+        Returns (is_expanding, expansion_ratio).
+        """
+        if len(self.price_data) < (period * 3) + 1:
+            return False, 1.0
+        
+        # Current ATR
+        current_atr = self.calculate_atr(period)
+        
+        # ATR from 1 period ago (use data offset)
+        older_data = list(self.price_data)[-(period * 2 + 1):-(period + 1)]
+        if len(older_data) < period + 1:
+            return False, 1.0
+        
+        tr_old = []
+        for i in range(1, len(older_data)):
+            h = older_data[i]['high']
+            l = older_data[i]['low']
+            pc = older_data[i - 1]['close']
+            tr_old.append(max(h - l, abs(h - pc), abs(l - pc)))
+        
+        old_atr = np.mean(tr_old) if tr_old else current_atr
+        
+        if old_atr == 0:
+            return False, 1.0
+        
+        ratio = current_atr / old_atr
+        return ratio > 1.05, ratio  # Expanding if ATR grew > 5%
+
+    def calculate_rsi_slope(self, period: int = 14, lookback: int = 5) -> float:
+        """
+        RSI momentum direction. Positive slope = strengthening momentum.
+        Used to avoid fading signals (RSI moving against trade direction).
+        """
+        if len(self.price_data) < period + lookback + 1:
+            return 0.0
+        
+        # Calculate RSI at current and lookback points
+        current_rsi = self.calculate_rsi(period)
+        
+        # Rough approximation: use data shifted back
+        saved = list(self.price_data)
+        temp_ta = HighConfirmationTA(lookback_periods=self.lookback_periods)
+        for c in saved[:-lookback]:
+            temp_ta.add_candle(c['timestamp'], c['open'], c['high'], c['low'], c['close'], c['volume'])
+        
+        old_rsi = temp_ta.calculate_rsi(period)
+        
+        return current_rsi - old_rsi  # Positive = RSI rising
+
     def calculate_ema_trend(self, fast_period: int = 20, slow_period: int = 50) -> Dict[str, float]:
         """EMA trend filter - determines dominant direction"""
         if len(self.price_data) < slow_period:
@@ -352,83 +405,105 @@ class HighConfirmationTA:
 
     def generate_signal(self) -> TechnicalSignal:
         """
-        UPGRADED: Weighted scoring system with EMA trend filter.
+        SNIPER MODE: Only takes high-conviction setups where
+        trend + momentum + volatility all align.
         
-        Instead of counting confirmations equally, each indicator contributes
-        a weighted score. The EMA trend filter ensures we only trade with
-        the dominant trend (no counter-trend trades).
+        Requirements to fire:
+          1. EMA trend with spread > 0.20% (strong trend)
+          2. MACD aligned with trend
+          3. At least one of: RSI confirmation, structure, or order flow
+          4. Volatility expanding (ATR growing)
+          5. No counter-signals blocking
         
-        Scoring:
-          EMA Trend alignment:  0.30 (required gate - blocks counter-trend)
-          MACD cross:           0.25
-          RSI extreme:          0.20
-          Structure break:      0.15
+        Scoring (0-1.0):
+          EMA Trend (strong):   0.30  (gate - required)
+          MACD alignment:       0.25  (gate - required)
+          Volatility expanding: 0.15  (strong bonus)
+          RSI confirmation:     0.15
+          Structure break:      0.10
           Order flow:           0.10
-          Bollinger touch:      0.10 (bonus)
+          Bollinger touch:      0.05  (bonus)
         
-        Signal fires when: score >= 0.55 AND trend agrees
+        Signal fires at score >= 0.60 with both gates passed.
         """
-        if len(self.price_data) < 50:
+        if len(self.price_data) < 60:
             return TechnicalSignal(
-                signal=TradeSignal.WAIT,
-                confidence=0.0,
-                timeframe="",
-                confirmations=[],
-                resistance_level=0,
-                support_level=0
+                signal=TradeSignal.WAIT, confidence=0.0, timeframe="",
+                confirmations=[], resistance_level=0, support_level=0
             )
 
         bull_score = 0.0
         bear_score = 0.0
         confirmations = []
+        has_ema_gate = False
+        has_macd_gate = False
 
-        # 1. EMA TREND FILTER (gate + 0.30 weight)
+        # === GATE 1: EMA TREND (required, 0.30) ===
         trend_data = self.calculate_ema_trend(20, 50)
         trend = trend_data['trend']
         ema_spread = abs(trend_data['spread_pct'])
         
-        if trend == 1 and ema_spread > 0.15:
+        if trend == 1 and ema_spread > 0.20:
             bull_score += 0.30
-            confirmations.append(f"EMA_BULLISH({trend_data['spread_pct']:+.2f}%)")
-        elif trend == -1 and ema_spread > 0.15:
+            has_ema_gate = True
+            confirmations.append(f"EMA_BULL({trend_data['spread_pct']:+.2f}%)")
+        elif trend == -1 and ema_spread > 0.20:
             bear_score += 0.30
-            confirmations.append(f"EMA_BEARISH({trend_data['spread_pct']:+.2f}%)")
-        # Weak trends (spread < 0.15%) get no EMA score - acts as gate
+            has_ema_gate = True
+            confirmations.append(f"EMA_BEAR({trend_data['spread_pct']:+.2f}%)")
 
-        # 2. MACD (0.25 weight)
-        macd, signal, histogram = self.calculate_macd()
-        if histogram > 0 and macd > signal:
+        # === GATE 2: MACD (required, 0.25) ===
+        macd_val, signal_val, histogram = self.calculate_macd()
+        if histogram > 0 and macd_val > signal_val:
             bull_score += 0.25
+            if trend >= 0:
+                has_macd_gate = True
             confirmations.append("MACD_BULL")
-        elif histogram < 0 and macd < signal:
+        elif histogram < 0 and macd_val < signal_val:
             bear_score += 0.25
+            if trend <= 0:
+                has_macd_gate = True
             confirmations.append("MACD_BEAR")
 
-        # 3. RSI (0.20 weight) - extreme zones more valuable
-        rsi = self.calculate_rsi()
-        if rsi < 25:
-            bull_score += 0.20
-            confirmations.append(f"RSI_OVERSOLD({rsi:.0f})")
-        elif rsi < 35:
-            bull_score += 0.10
-            confirmations.append(f"RSI_LOW({rsi:.0f})")
-        elif rsi > 75:
-            bear_score += 0.20
-            confirmations.append(f"RSI_OVERBOUGHT({rsi:.0f})")
-        elif rsi > 65:
-            bear_score += 0.10
-            confirmations.append(f"RSI_HIGH({rsi:.0f})")
+        # === VOLATILITY EXPANSION (0.15) ===
+        vol_expanding, vol_ratio = self.is_volatility_expanding()
+        if vol_expanding:
+            # Add to whichever direction is leading
+            if bull_score > bear_score:
+                bull_score += 0.15
+            elif bear_score > bull_score:
+                bear_score += 0.15
+            confirmations.append(f"VOL_EXPAND({vol_ratio:.2f}x)")
 
-        # 4. STRUCTURE (0.15 weight)
+        # === RSI (0.15) ===
+        rsi = self.calculate_rsi()
+        rsi_slope = self.calculate_rsi_slope()
+        
+        if rsi < 30 and rsi_slope > 0:
+            # Oversold AND momentum turning up = strong long signal
+            bull_score += 0.15
+            confirmations.append(f"RSI_REVERSAL({rsi:.0f},slope+{rsi_slope:.1f})")
+        elif rsi < 40 and trend == 1:
+            # Not overbought in uptrend = room to run
+            bull_score += 0.08
+            confirmations.append(f"RSI_OK({rsi:.0f})")
+        elif rsi > 70 and rsi_slope < 0:
+            bear_score += 0.15
+            confirmations.append(f"RSI_REVERSAL({rsi:.0f},slope{rsi_slope:.1f})")
+        elif rsi > 60 and trend == -1:
+            bear_score += 0.08
+            confirmations.append(f"RSI_OK({rsi:.0f})")
+
+        # === STRUCTURE (0.10) ===
         structure = self.detect_structure_breaks()
         if structure['uptrend']:
-            bull_score += 0.15
+            bull_score += 0.10
             confirmations.append("STRUCT_UP")
         elif structure['downtrend']:
-            bear_score += 0.15
+            bear_score += 0.10
             confirmations.append("STRUCT_DOWN")
 
-        # 5. ORDER FLOW (0.10 weight)
+        # === ORDER FLOW (0.10) ===
         flow = self.analyze_order_flow()
         if flow['buy_pressure'] > 0.60:
             bull_score += 0.10
@@ -437,28 +512,30 @@ class HighConfirmationTA:
             bear_score += 0.10
             confirmations.append(f"FLOW_SELL({flow['sell_pressure']:.0%})")
 
-        # 6. BOLLINGER BANDS (0.10 bonus)
+        # === BOLLINGER BANDS (0.05 bonus) ===
         upper, mid, lower = self.calculate_bollinger_bands()
         current_price = self.price_data[-1]['close']
         if current_price < lower:
-            bull_score += 0.10
+            bull_score += 0.05
             confirmations.append("BB_LOWER")
         elif current_price > upper:
-            bear_score += 0.10
+            bear_score += 0.05
             confirmations.append("BB_UPPER")
 
-        # DETERMINE SIGNAL
-        # Must have trend alignment (EMA trend gate)
+        # === DETERMINE SIGNAL ===
+        # Sniper mode: BOTH gates must pass + score >= 0.60
         atr = self.calculate_atr()
         swings = self.find_swing_levels()
         liquidity = self.detect_liquidity_voids()
 
-        min_score = 0.55
+        min_score = 0.60
         
-        if bull_score >= min_score and trend >= 0:
+        if (bull_score >= min_score and has_ema_gate and has_macd_gate 
+                and trend >= 0):
             final_signal = TradeSignal.LONG
             confidence = min(0.95, bull_score)
-        elif bear_score >= min_score and trend <= 0:
+        elif (bear_score >= min_score and has_ema_gate and has_macd_gate 
+                and trend <= 0):
             final_signal = TradeSignal.SHORT
             confidence = min(0.95, bear_score)
         else:
@@ -1028,6 +1105,28 @@ class HyperliquidExecutor:
             logger.error(f"Close position exception: {e}")
             return {}
 
+    def get_funding_rate(self, symbol: str) -> Optional[float]:
+        """Fetch live funding rate for a symbol. Returns rate per 8h period."""
+        try:
+            resp = self.session.post(
+                f"{self.base_url}/info",
+                json={'type': 'metaAndAssetCtxs'},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                # data is [meta, [assetCtx, ...]]
+                if isinstance(data, list) and len(data) >= 2:
+                    meta = data[0]
+                    ctxs = data[1]
+                    for i, u in enumerate(meta.get('universe', [])):
+                        if u['name'] == symbol and i < len(ctxs):
+                            return float(ctxs[i].get('funding', 0))
+            return None
+        except Exception as e:
+            logger.warning(f"Funding rate fetch failed: {e}")
+            return None
+
 
 # ============================================================================
 # RISK MANAGEMENT MODULE
@@ -1207,7 +1306,22 @@ class HyperliquidTradingBot:
                 logger.debug(f"{symbol}: Low confidence {ta_signal.confidence:.2f}")
                 continue
             
-            # 5. EXECUTE TRADE
+            # 5. FUNDING RATE EDGE FILTER
+            # Block trades that go against extreme funding (crowd is overleveraged)
+            funding = self.executor.get_funding_rate(symbol)
+            if funding is not None:
+                logger.info(f"{symbol}: Funding rate = {funding:.6f}")
+                # Positive funding = longs paying shorts = longs overleveraged
+                # Block LONG if funding is very positive (crowd already long)
+                if ta_signal.signal == TradeSignal.LONG and funding > 0.0001:
+                    logger.info(f"{symbol}: Skipping LONG - funding too positive ({funding:.6f}), longs overleveraged")
+                    continue
+                # Block SHORT if funding is very negative (crowd already short)
+                if ta_signal.signal == TradeSignal.SHORT and funding < -0.0001:
+                    logger.info(f"{symbol}: Skipping SHORT - funding too negative ({funding:.6f}), shorts overleveraged")
+                    continue
+            
+            # 6. EXECUTE TRADE
             current_price = candles[-1]['close']
             self._execute_trade_signal(symbol, ta_signal, macro_assessment, current_price)
 
@@ -1234,9 +1348,9 @@ class HyperliquidTradingBot:
         
         entry_price = current_price
         
-        # ATR-based stops: SL = 1.5x ATR, TP = 2.5x ATR
-        atr_sl_mult = 1.5
-        atr_tp_mult = 2.5
+        # ATR-based stops: SL = 2.0x ATR, TP = 4.0x ATR (optimized)
+        atr_sl_mult = 2.0
+        atr_tp_mult = 4.0
         
         if signal.signal == TradeSignal.LONG:
             sl_price = entry_price - (atr * atr_sl_mult)
@@ -1335,7 +1449,7 @@ def main():
         'HYPERLIQUID_ACCOUNT': os.getenv('HYPERLIQUID_ACCOUNT'),
         'ACCOUNT_SIZE': float(os.getenv('ACCOUNT_SIZE', 10000)),
         'MAX_LOSS_PER_TRADE': float(os.getenv('MAX_LOSS_PER_TRADE', 0.02)),
-        'SYMBOLS': os.getenv('SYMBOLS', 'BTC,ETH').split(','),
+        'SYMBOLS': os.getenv('SYMBOLS', 'BTC').split(','),
         'CYCLE_INTERVAL': int(os.getenv('CYCLE_INTERVAL', 60)),
         'USE_TESTNET': os.getenv('USE_TESTNET', 'false').lower() == 'true',
         'DRY_RUN': os.getenv('DRY_RUN', 'true').lower() == 'true',

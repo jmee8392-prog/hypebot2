@@ -190,14 +190,14 @@ def run_backtest(candles: List[Dict], coin: str,
             signals_invalid += 1
             continue
 
-        # ATR-based SL/TP: SL = 1.5x ATR, TP = 2.5x ATR
+        # ATR-based SL/TP: SL = 2.0x ATR, TP = 4.0x ATR (optimized)
         if side == "LONG":
-            sl_price = entry_price - (atr * 1.5)
-            tp_price = entry_price + (atr * 2.5)
+            sl_price = entry_price - (atr * 2.0)
+            tp_price = entry_price + (atr * 4.0)
             leverage = 2.0
         else:
-            sl_price = entry_price + (atr * 1.5)
-            tp_price = entry_price - (atr * 2.5)
+            sl_price = entry_price + (atr * 2.0)
+            tp_price = entry_price - (atr * 4.0)
             leverage = 2.0
 
         if sl_price <= 0 or entry_price <= 0:
@@ -386,7 +386,7 @@ def main():
     print(f"Started: {datetime.now(timezone.utc).isoformat()}")
 
     ACCOUNT_SIZE = 1000.0
-    coins = ['BTC', 'ETH']
+    coins = ['BTC']
     intervals = ['5m', '15m']  # Multiple timeframes for more data
 
     # Fetch all data

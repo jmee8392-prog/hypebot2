@@ -37,12 +37,13 @@ User has a Hyperliquid trading bot. Requested:
 - 2,061 trades, 0.3% win rate, 95% timeouts, +$2.10 PnL
 - Trades almost never resolved - SL/TP too wide
 
-### v2 (Upgraded - weighted scoring + ATR stops + EMA trend filter)
-- 5,409 trades, 34.9% win rate, 1.3% timeouts, -$6.10 PnL (-0.61%)
-- Profit factor: 0.90 (close to breakeven)
-- Max drawdown: 0.81%
-- Trades actually resolve now. Win rate needs ~37.5% to break even at current R:R.
-- Strong trend signals (EMA spread > 0.3%) had 71% win rate
+### v3 (Sniper mode — BTC only, dual gates, volatility filter, ATR optimized 2.0/4.0)
+- 1,856 trades, 31.7% win rate, 4.7% timeouts, +$0.05 PnL (+0.01%)
+- Profit factor: 1.00 (breakeven to slightly profitable)
+- Max drawdown: 0.02%
+- LONG 33.5% WR (+$0.09), SHORT 30.0% WR (-$0.03)
+- Strong trend signals (EMA +0.33%+) had 60% WR
+- Funding rate filter added for live trading (not in backtest)
 
 ## Prioritized Backlog
 

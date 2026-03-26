@@ -6,3 +6,7 @@ venv/
 logs/
 *.log
 simulation_results.json
+-e 
+# Environment files
+*.env
+*.env.*

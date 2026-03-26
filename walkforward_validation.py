@@ -162,7 +162,7 @@ def run_window(candles: List[Dict], exec_model: ExecutionModel,
                max_dd_pct: float = 5.0) -> Dict:
     """Run backtest on a single data window with execution model"""
     
-    risk_mgr = RiskManager(account_size=account_size, max_loss_per_trade=0.02)
+    risk_mgr = RiskManager(account_size=account_size, max_loss_per_trade=0.03)
     window_size = 200
     future_window = 100
     
@@ -202,17 +202,17 @@ def run_window(candles: List[Dict], exec_model: ExecutionModel,
             sl = entry + (atr * 2.0)
             tp = entry - (atr * 4.0)
         
-        pos_size = risk_mgr.calculate_position_size(entry, sl, 2.0)
+        pos_size = risk_mgr.calculate_position_size(entry, sl, 3.0)
         
         # Simulate with frictions
         result = simulate_trade_realistic(entry, sl, tp, future, side, exec_model, candle_minutes)
         
         # Add funding cost
         funding_cost = exec_model.funding_cost(
-            pos_size * 2.0, result['candles'], candle_minutes, side
+            pos_size * 3.0, result['candles'], candle_minutes, side
         )
         
-        trade_pnl = (pos_size * 2.0 * result['pnl_pct']) - funding_cost
+        trade_pnl = (pos_size * 3.0 * result['pnl_pct']) - funding_cost
         balance += trade_pnl
         
         # Track drawdown

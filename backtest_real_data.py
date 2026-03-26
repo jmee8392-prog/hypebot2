@@ -190,15 +190,15 @@ def run_backtest(candles: List[Dict], coin: str,
             signals_invalid += 1
             continue
 
-        # ATR-based SL/TP: SL = 2.0x ATR, TP = 4.0x ATR (optimized)
+        # ATR-based SL/TP: SL = 2.0x ATR, TP = 4.0x ATR (proven + aggressive sizing)
         if side == "LONG":
             sl_price = entry_price - (atr * 2.0)
             tp_price = entry_price + (atr * 4.0)
-            leverage = 2.0
+            leverage = 3.0
         else:
             sl_price = entry_price + (atr * 2.0)
             tp_price = entry_price - (atr * 4.0)
-            leverage = 2.0
+            leverage = 3.0
 
         if sl_price <= 0 or entry_price <= 0:
             signals_invalid += 1

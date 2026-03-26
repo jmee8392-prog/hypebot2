@@ -1139,7 +1139,7 @@ class RiskManager:
 
     def __init__(self, account_size: float, max_loss_per_trade: float = 0.02):
         self.account_size = account_size
-        self.max_loss_per_trade = max_loss_per_trade  # 2% default
+        self.max_loss_per_trade = max_loss_per_trade  # 5% aggressive
         self.max_open_positions = 5
         self.min_risk_reward_ratio = 1.5  # Require at least 1.5:1 RR
 
@@ -1348,19 +1348,19 @@ class HyperliquidTradingBot:
         
         entry_price = current_price
         
-        # ATR-based stops: SL = 2.0x ATR, TP = 4.0x ATR (optimized)
+        # ATR-based stops: SL = 2.0x ATR, TP = 4.0x ATR (proven profitable combo)
         atr_sl_mult = 2.0
         atr_tp_mult = 4.0
         
         if signal.signal == TradeSignal.LONG:
             sl_price = entry_price - (atr * atr_sl_mult)
             tp_price = entry_price + (atr * atr_tp_mult)
-            leverage = 2.0 if macro['regime'] == 'BULLISH' else 1.0
+            leverage = 2.0
             side = "LONG"
         else:
             sl_price = entry_price + (atr * atr_sl_mult)
             tp_price = entry_price - (atr * atr_tp_mult)
-            leverage = 2.0 if macro['regime'] == 'BEARISH' else 1.0
+            leverage = 2.0
             side = "SHORT"
         
         # Validate

@@ -1,0 +1,19 @@
+2026-03-26 02:18:46,251 - __main__ - INFO - 
+======================================================================
+2026-03-26 02:18:46,251 - __main__ - INFO - BOT CONFIGURATION
+2026-03-26 02:18:46,251 - __main__ - INFO - ======================================================================
+2026-03-26 02:18:46,252 - __main__ - INFO - Mode: MAINNET
+2026-03-26 02:18:46,252 - __main__ - INFO - Type: DRY RUN
+2026-03-26 02:18:46,252 - __main__ - INFO - Account Size: $10,000.00
+2026-03-26 02:18:46,252 - __main__ - INFO - Max Loss Per Trade: 2.0%
+2026-03-26 02:18:46,252 - __main__ - INFO - Symbols: BTC, ETH
+2026-03-26 02:18:46,252 - __main__ - INFO - Cycle Interval: 60s
+2026-03-26 02:18:46,252 - __main__ - INFO - ======================================================================
+
+2026-03-26 02:18:46,252 - __main__ - INFO - HyperliquidExecutor initialized - Mode: MAINNET, Account Type: perps, Dry Run: True
+2026-03-26 02:18:46,252 - __main__ - INFO - HyperliquidTradingBot initialized - Mode: MAINNET, Type: DRY RUN
+2026-03-26 02:18:46,252 - __main__ - INFO - Running bot in single cycle test mode
+2026-03-26 02:18:46,303 - __main__ - INFO - Macro Regime: BULLISH | Risk Level: NORMAL | Geo Risk: LOW
+2026-03-26 02:18:46,304 - __main__ - INFO - 
+Performance Summary:
+2026-03-26 02:18:46,304 - __main__ - INFO -   total_trades: 0

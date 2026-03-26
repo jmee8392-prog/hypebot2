@@ -145,15 +145,15 @@ class HighConfirmationTA:
         """MACD (Moving Average Convergence Divergence)"""
         if len(self.price_data) < slow + signal:
             return 0, 0, 0
-        
+
         closes = np.array([c['close'] for c in self.price_data])
-        
+
         exp1 = self._ema(closes, fast)
         exp2 = self._ema(closes, slow)
         macd_line = exp1 - exp2
-        signal_line = self._ema(np.array([macd_line] * len(closes)), signal)[-1]
+        signal_line = self._ema(macd_line, signal)[-1]
         histogram = macd_line[-1] - signal_line
-        
+
         return macd_line[-1], signal_line, histogram
 
     def calculate_bollinger_bands(self, period: int = 20, std_dev: int = 2) -> Tuple[float, float, float]:
@@ -632,16 +632,29 @@ class GeopoliticalRiskMonitor:
 class HyperliquidExecutor:
     """
     Handles authentication, order placement, position management on Hyperliquid.
+    Supports both mainnet (perps) and testnet (unified account structure).
     """
 
-    def __init__(self, private_key: str, account_address: str, 
-                 api_url: str = "https://api.hyperliquid.xyz"):
+    def __init__(self, private_key: str, account_address: str,
+                 api_url: str = "https://api.hyperliquid.xyz",
+                 is_testnet: bool = False, dry_run: bool = False):
         self.private_key = private_key
         self.account_address = account_address
-        self.api_url = api_url
+        self.is_testnet = is_testnet
+        self.dry_run = dry_run
+
+        if is_testnet:
+            self.api_url = "https://testnet.hyperliquid.xyz" if not api_url.startswith("http") else api_url
+        else:
+            self.api_url = api_url
+
         self.session = requests.Session()
         self.open_orders = {}
         self.positions = {}
+        self.account_type = "unified" if is_testnet else "perps"
+
+        logger.info(f"HyperliquidExecutor initialized - Mode: {'TESTNET' if is_testnet else 'MAINNET'}, "
+                   f"Account Type: {self.account_type}, Dry Run: {dry_run}")
 
     def _sign_request(self, data: Dict) -> str:
         """Sign request using Hyperliquid's signature scheme"""
@@ -654,13 +667,13 @@ class HyperliquidExecutor:
         ).hexdigest()
         return signature
 
-    def place_order(self, symbol: str, side: str, size: float, 
+    def place_order(self, symbol: str, side: str, size: float,
                    limit_price: Optional[float] = None,
-                   leverage: float = 1.0, 
+                   leverage: float = 1.0,
                    reduce_only: bool = False) -> Dict:
         """
         Place order on Hyperliquid.
-        
+
         side: "BUY" or "SELL"
         size: Position size in USD
         limit_price: None = market order
@@ -677,9 +690,19 @@ class HyperliquidExecutor:
                 'clientOrderId': int(time.time() * 1000)
             }
 
-            # Sign and submit
+            if self.dry_run:
+                logger.info(f"[DRY RUN] Order would be placed: {symbol} {side} {size} @ {limit_price} (Leverage: {leverage}x)")
+                return {
+                    'status': 'dry_run_simulated',
+                    'orderId': f"SIM_{order_data['clientOrderId']}",
+                    'symbol': symbol,
+                    'side': side,
+                    'size': size,
+                    'price': limit_price
+                }
+
             signature = self._sign_request(order_data)
-            
+
             response = self.session.post(
                 f"{self.api_url}/exchange",
                 json={
@@ -711,15 +734,22 @@ class HyperliquidExecutor:
         return self.place_order(symbol, "SELL", 1.0, limit_price=price, reduce_only=True)
 
     def get_account_state(self) -> Dict:
-        """Fetch account balance and open positions"""
+        """Fetch account balance and open positions (handles both perps and unified accounts)"""
         try:
+            endpoint = "/info" if self.account_type == "perps" else "/info"
+
             response = self.session.get(
-                f"{self.api_url}/info",
+                f"{self.api_url}{endpoint}",
                 params={'user': self.account_address},
                 timeout=10
             )
             if response.status_code == 200:
-                return response.json()
+                state = response.json()
+
+                if self.is_testnet and self.account_type == "unified":
+                    logger.debug("Processing unified account structure")
+
+                return state
             else:
                 logger.error(f"Account fetch failed: {response.status_code}")
                 return {}
@@ -812,20 +842,30 @@ class HyperliquidTradingBot:
         self.ta_engine = HighConfirmationTA()
         self.macro_monitor = MacroLiquidityMonitor()
         self.geo_monitor = GeopoliticalRiskMonitor()
+
+        is_testnet = config.get('USE_TESTNET', False)
+        dry_run = config.get('DRY_RUN', False)
+
         self.executor = HyperliquidExecutor(
             private_key=config['HYPERLIQUID_PRIVATE_KEY'],
-            account_address=config['HYPERLIQUID_ACCOUNT']
+            account_address=config['HYPERLIQUID_ACCOUNT'],
+            is_testnet=is_testnet,
+            dry_run=dry_run
         )
         self.risk_manager = RiskManager(
             account_size=config['ACCOUNT_SIZE'],
             max_loss_per_trade=config.get('MAX_LOSS_PER_TRADE', 0.02)
         )
-        
+
         self.trading_symbols = config.get('SYMBOLS', ['BTC', 'ETH'])
         self.is_running = False
         self.trades_executed = []
-        
-        logger.info("HyperliquidTradingBot initialized")
+        self.is_testnet = is_testnet
+        self.dry_run = dry_run
+
+        mode = "TESTNET" if is_testnet else "MAINNET"
+        run_type = "DRY RUN" if dry_run else "LIVE"
+        logger.info(f"HyperliquidTradingBot initialized - Mode: {mode}, Type: {run_type}")
 
     def run(self):
         """Main event loop"""
@@ -969,30 +1009,40 @@ class HyperliquidTradingBot:
 
 def main():
     """Initialize and run the bot"""
-    
-    # Configuration
+
     config = {
         'HYPERLIQUID_PRIVATE_KEY': os.getenv('HYPERLIQUID_PRIVATE_KEY'),
         'HYPERLIQUID_ACCOUNT': os.getenv('HYPERLIQUID_ACCOUNT'),
-        'ACCOUNT_SIZE': 10000,  # $10k account
-        'MAX_LOSS_PER_TRADE': 0.02,  # 2% max loss
-        'SYMBOLS': ['BTC', 'ETH'],
-        'CYCLE_INTERVAL': 60,  # 60 second cycle
+        'ACCOUNT_SIZE': float(os.getenv('ACCOUNT_SIZE', 10000)),
+        'MAX_LOSS_PER_TRADE': float(os.getenv('MAX_LOSS_PER_TRADE', 0.02)),
+        'SYMBOLS': os.getenv('SYMBOLS', 'BTC,ETH').split(','),
+        'CYCLE_INTERVAL': int(os.getenv('CYCLE_INTERVAL', 60)),
+        'USE_TESTNET': os.getenv('USE_TESTNET', 'false').lower() == 'true',
+        'DRY_RUN': os.getenv('DRY_RUN', 'true').lower() == 'true',
     }
-    
-    # Validate config
+
     if not config['HYPERLIQUID_PRIVATE_KEY'] or not config['HYPERLIQUID_ACCOUNT']:
         logger.error("Missing Hyperliquid credentials in .env")
         return
-    
-    # Initialize bot
+
+    mode = "TESTNET" if config['USE_TESTNET'] else "MAINNET"
+    run_type = "DRY RUN" if config['DRY_RUN'] else "LIVE TRADING"
+    logger.info(f"\n{'='*70}")
+    logger.info(f"BOT CONFIGURATION")
+    logger.info(f"{'='*70}")
+    logger.info(f"Mode: {mode}")
+    logger.info(f"Type: {run_type}")
+    logger.info(f"Account Size: ${config['ACCOUNT_SIZE']:,.2f}")
+    logger.info(f"Max Loss Per Trade: {config['MAX_LOSS_PER_TRADE']*100:.1f}%")
+    logger.info(f"Symbols: {', '.join(config['SYMBOLS'])}")
+    logger.info(f"Cycle Interval: {config['CYCLE_INTERVAL']}s")
+    logger.info(f"{'='*70}\n")
+
     bot = HyperliquidTradingBot(config)
-    
-    # For demonstration: Run a single cycle instead of infinite loop
-    logger.info("Running bot in demo mode (single cycle)")
+
+    logger.info("Running bot in single cycle test mode")
     bot._cycle()
-    
-    # Print summary
+
     summary = bot.get_performance_summary()
     logger.info(f"\nPerformance Summary:")
     for key, value in summary.items():

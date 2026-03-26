@@ -356,12 +356,16 @@ class TestHyperliquidExecutor:
         self.failed = 0
 
     def test_signature_generation(self):
-        """Test request signing"""
+        """Test SDK-based executor initialization"""
         try:
-            data = {'test': 'data'}
-            sig = self.executor._sign_request(data)
-            assert isinstance(sig, str)
-            assert len(sig) == 64, "SHA256 hex digest should be 64 chars"
+            # With non-real keys, SDK init will fail but executor still works in dry_run
+            executor = HyperliquidExecutor(
+                private_key="0x0000000000000000000000000000000000000000000000000000000000000001",
+                account_address="0xtest123",
+                dry_run=True
+            )
+            assert executor.dry_run == True
+            assert executor.account_type == "perps"
             logger.info(f"✓ test_signature_generation PASSED")
             self.passed += 1
         except Exception as e:

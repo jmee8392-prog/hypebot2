@@ -16,12 +16,10 @@ ARCHITECTURE:
 import os
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
-import hashlib
-import hmac
 import asyncio
 import logging
 from collections import deque
@@ -30,6 +28,34 @@ import numpy as np
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from eth_account import Account as EthAccount
+
+# Monkey-patch hyperliquid SDK Info class to handle testnet spot_meta bug
+import hyperliquid.info as _hl_info_module
+import hyperliquid.utils.constants as _hl_constants
+_original_info_init = _hl_info_module.Info.__init__
+
+def _patched_info_init(self, base_url=None, skip_ws=False, meta=None, spot_meta=None, perp_dexs=None, timeout=None):
+    try:
+        _original_info_init(self, base_url, skip_ws, meta, spot_meta, perp_dexs, timeout)
+    except (IndexError, KeyError):
+        self.base_url = base_url or _hl_constants.MAINNET_API_URL
+        self.meta = meta
+        self.spot_meta = spot_meta
+        self.coin_to_asset = {}
+        self.name_to_coin = {}
+        self.coin_to_name = {}
+        if meta:
+            for idx, asset_info in enumerate(meta.get('universe', [])):
+                self.coin_to_asset[asset_info['name']] = idx
+        self.ws_manager = None
+        self.ws = None
+        self.timeout = timeout
+
+_hl_info_module.Info.__init__ = _patched_info_init
+
+from hyperliquid.exchange import Exchange as HLExchange
+from hyperliquid.utils import constants as hl_constants
 
 # Load environment variables
 load_dotenv()
@@ -173,7 +199,8 @@ class HighConfirmationTA:
     def detect_structure_breaks(self) -> Dict[str, bool]:
         """Identify structural price action breaks"""
         if len(self.price_data) < 50:
-            return {'higher_high': False, 'higher_low': False, 'lower_low': False}
+            return {'higher_high': False, 'higher_low': False, 'lower_low': False,
+                    'lower_high': False, 'uptrend': False, 'downtrend': False}
         
         recent = list(self.price_data)[-50:]
         
@@ -181,10 +208,16 @@ class HighConfirmationTA:
         highs = [c['high'] for c in recent]
         lows = [c['low'] for c in recent]
         
-        higher_high = highs[-1] > max(highs[:-1])
-        higher_low = lows[-1] > max(lows[:-10:-1])
-        lower_low = lows[-1] < min(lows[:-1])
-        lower_high = highs[-1] < min(highs[:-10:-1])
+        # Recent 10 candle swing vs prior 40
+        recent_highs = highs[-10:]
+        prior_highs = highs[:-10]
+        recent_lows = lows[-10:]
+        prior_lows = lows[:-10]
+        
+        higher_high = max(recent_highs) > max(prior_highs)
+        higher_low = min(recent_lows) > min(prior_lows)
+        lower_low = min(recent_lows) < min(prior_lows)
+        lower_high = max(recent_highs) < max(prior_highs)
         
         return {
             'higher_high': higher_high,
@@ -355,10 +388,11 @@ class MacroLiquidityMonitor:
     Provides real-time assessment of market environment health.
     """
 
-    def __init__(self):
+    def __init__(self, api_url: str = "https://api.hyperliquid.xyz"):
         self.indicators: Dict[str, MacroIndicator] = {}
         self.historical_data = deque(maxlen=100)
         self.last_update = None
+        self._api_url = api_url
 
     def update_fed_liquidity(self) -> MacroIndicator:
         """
@@ -446,13 +480,31 @@ class MacroLiquidityMonitor:
         Positive rates = longs over-leveraged (bearish signal).
         Negative rates = shorts over-leveraged (bullish signal).
         """
-        # Would fetch actual funding rates from Hyperliquid API
+        funding_value = 0.00045  # Default placeholder
+        try:
+            resp = requests.post(
+                self._api_url + '/info',
+                json={'type': 'meta'},
+                timeout=10
+            )
+            if resp.status_code == 200:
+                meta = resp.json()
+                for u in meta.get('universe', []):
+                    if u.get('name') == symbol:
+                        funding_value = float(u.get('funding', 0.0))
+                        break
+        except Exception as e:
+            logger.warning(f"Funding rate fetch failed: {e}")
+
+        # Positive funding = longs pay = longs over-leveraged = BEARISH
+        # Negative funding = shorts pay = shorts over-leveraged = BULLISH
+        impact = "BEARISH" if funding_value > 0 else "BULLISH" if funding_value < 0 else "NEUTRAL"
         indicator = MacroIndicator(
             name=f"{symbol} Perpetual Funding Rate",
-            value=0.00045,  # 0.045% per 8h = slightly bullish
+            value=funding_value,
             threshold=0.0,
             status="HEALTHY",
-            impact="BULLISH" if 0.00045 < 0 else "BEARISH"
+            impact=impact
         )
         self.indicators['funding_rates'] = indicator
         return indicator
@@ -632,126 +684,189 @@ class GeopoliticalRiskMonitor:
 class HyperliquidExecutor:
     """
     Handles authentication, order placement, position management on Hyperliquid.
-    Supports both mainnet (perps) and testnet (unified account structure).
+    Uses the official hyperliquid-python-sdk for EIP-712 signing.
+    Supports both mainnet and testnet (unified account structure).
     """
 
     def __init__(self, private_key: str, account_address: str,
-                 api_url: str = "https://api.hyperliquid.xyz",
                  is_testnet: bool = False, dry_run: bool = False):
         self.private_key = private_key
         self.account_address = account_address
         self.is_testnet = is_testnet
         self.dry_run = dry_run
 
-        if is_testnet:
-            self.api_url = "https://testnet.hyperliquid.xyz" if not api_url.startswith("http") else api_url
-        else:
-            self.api_url = api_url
+        self.base_url = hl_constants.TESTNET_API_URL if is_testnet else hl_constants.MAINNET_API_URL
+        self.account_type = "unified" if is_testnet else "perps"
 
         self.session = requests.Session()
         self.open_orders = {}
         self.positions = {}
-        self.account_type = "unified" if is_testnet else "perps"
+        self.exchange = None
+        self.meta = None
+
+        # Initialize SDK exchange for order signing
+        if not dry_run:
+            try:
+                self.wallet = EthAccount.from_key(private_key)
+                meta_resp = self.session.post(
+                    f"{self.base_url}/info",
+                    json={'type': 'meta'},
+                    timeout=10
+                )
+                if meta_resp.status_code == 200:
+                    self.meta = meta_resp.json()
+                    self.exchange = HLExchange(
+                        wallet=self.wallet,
+                        base_url=self.base_url,
+                        meta=self.meta,
+                        account_address=account_address
+                    )
+                    logger.info("Hyperliquid SDK Exchange initialized")
+                else:
+                    logger.error(f"Failed to fetch meta: {meta_resp.status_code}")
+            except Exception as e:
+                logger.error(f"SDK init failed: {e}")
 
         logger.info(f"HyperliquidExecutor initialized - Mode: {'TESTNET' if is_testnet else 'MAINNET'}, "
                    f"Account Type: {self.account_type}, Dry Run: {dry_run}")
 
-    def _sign_request(self, data: Dict) -> str:
-        """Sign request using Hyperliquid's signature scheme"""
-        message = json.dumps(data, separators=(',', ':'), sort_keys=True)
-        message_bytes = message.encode('utf-8')
-        signature = hmac.new(
-            self.private_key.encode('utf-8'),
-            message_bytes,
-            hashlib.sha256
-        ).hexdigest()
-        return signature
+    def fetch_candles(self, coin: str, interval: str = "1m", count: int = 200) -> List[Dict]:
+        """Fetch OHLCV candle data from Hyperliquid API"""
+        try:
+            end_time = int(time.time() * 1000)
+            # Interval to ms mapping
+            interval_ms = {
+                "1m": 60_000, "5m": 300_000, "15m": 900_000,
+                "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000
+            }
+            ms_per_candle = interval_ms.get(interval, 60_000)
+            start_time = end_time - (count * ms_per_candle)
+
+            resp = self.session.post(
+                f"{self.base_url}/info",
+                json={
+                    'type': 'candleSnapshot',
+                    'req': {
+                        'coin': coin,
+                        'interval': interval,
+                        'startTime': start_time,
+                        'endTime': end_time
+                    }
+                },
+                timeout=15
+            )
+
+            if resp.status_code == 200:
+                raw_candles = resp.json()
+                candles = []
+                for c in raw_candles:
+                    candles.append({
+                        'timestamp': c['t'] / 1000,
+                        'open': float(c['o']),
+                        'high': float(c['h']),
+                        'low': float(c['l']),
+                        'close': float(c['c']),
+                        'volume': float(c['v'])
+                    })
+                return candles
+            else:
+                logger.error(f"Candle fetch failed: {resp.status_code}")
+                return []
+        except Exception as e:
+            logger.error(f"Candle fetch exception: {e}")
+            return []
 
     def place_order(self, symbol: str, side: str, size: float,
                    limit_price: Optional[float] = None,
                    leverage: float = 1.0,
                    reduce_only: bool = False) -> Dict:
         """
-        Place order on Hyperliquid.
-
+        Place order on Hyperliquid using SDK.
         side: "BUY" or "SELL"
-        size: Position size in USD
-        limit_price: None = market order
+        size: Position size in coin units
+        limit_price: None = market order (uses IOC at aggressive price)
         """
         try:
-            order_data = {
-                'action': 'place',
-                'symbol': symbol,
-                'side': side,
-                'size': size,
-                'limitPrice': limit_price,
-                'leverage': leverage,
-                'reduceOnly': reduce_only,
-                'clientOrderId': int(time.time() * 1000)
-            }
-
             if self.dry_run:
-                logger.info(f"[DRY RUN] Order would be placed: {symbol} {side} {size} @ {limit_price} (Leverage: {leverage}x)")
+                logger.info(f"[DRY RUN] Order: {symbol} {side} {size} @ {limit_price} (Leverage: {leverage}x)")
                 return {
                     'status': 'dry_run_simulated',
-                    'orderId': f"SIM_{order_data['clientOrderId']}",
+                    'orderId': f"SIM_{int(time.time() * 1000)}",
                     'symbol': symbol,
                     'side': side,
                     'size': size,
                     'price': limit_price
                 }
 
-            signature = self._sign_request(order_data)
-
-            response = self.session.post(
-                f"{self.api_url}/exchange",
-                json={
-                    'action': 'orders',
-                    'order': order_data,
-                    'signature': signature
-                },
-                timeout=10
-            )
-
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Order placed: {symbol} {side} {size} @ {limit_price}")
-                return result
-            else:
-                logger.error(f"Order failed: {response.text}")
+            if not self.exchange:
+                logger.error("Exchange not initialized - cannot place orders")
                 return None
+
+            is_buy = side.upper() == "BUY"
+
+            if limit_price:
+                order_type = {"limit": {"tif": "Gtc"}}
+                result = self.exchange.order(symbol, is_buy, size, limit_price, order_type, reduce_only=reduce_only)
+            else:
+                # Market order: use aggressive limit with IOC
+                order_type = {"limit": {"tif": "Ioc"}}
+                current_price = self._get_mid_price(symbol)
+                if current_price:
+                    aggressive_px = current_price * (1.005 if is_buy else 0.995)
+                    result = self.exchange.order(symbol, is_buy, size, aggressive_px, order_type, reduce_only=reduce_only)
+                else:
+                    logger.error("Cannot get current price for market order")
+                    return None
+
+            logger.info(f"Order placed: {symbol} {side} {size} @ {limit_price} -> {result}")
+            return result
 
         except Exception as e:
             logger.error(f"Order placement exception: {e}")
             return None
 
-    def set_stop_loss(self, symbol: str, price: float) -> Dict:
-        """Place stop-loss order"""
-        return self.place_order(symbol, "SELL", 1.0, limit_price=price, reduce_only=True)
-
-    def set_take_profit(self, symbol: str, price: float) -> Dict:
-        """Place take-profit order"""
-        return self.place_order(symbol, "SELL", 1.0, limit_price=price, reduce_only=True)
-
-    def get_account_state(self) -> Dict:
-        """Fetch account balance and open positions (handles both perps and unified accounts)"""
+    def _get_mid_price(self, symbol: str) -> Optional[float]:
+        """Get current mid price for a symbol"""
         try:
-            endpoint = "/info" if self.account_type == "perps" else "/info"
-
-            response = self.session.get(
-                f"{self.api_url}{endpoint}",
-                params={'user': self.account_address},
+            resp = self.session.post(
+                f"{self.base_url}/info",
+                json={'type': 'allMids'},
                 timeout=10
             )
-            if response.status_code == 200:
-                state = response.json()
+            if resp.status_code == 200:
+                mids = resp.json()
+                if symbol in mids:
+                    return float(mids[symbol])
+            return None
+        except Exception:
+            return None
 
-                if self.is_testnet and self.account_type == "unified":
-                    logger.debug("Processing unified account structure")
+    def set_stop_loss(self, symbol: str, price: float, size: float, is_long: bool) -> Dict:
+        """Place stop-loss order"""
+        side = "SELL" if is_long else "BUY"
+        return self.place_order(symbol, side, size, limit_price=price, reduce_only=True)
 
+    def set_take_profit(self, symbol: str, price: float, size: float, is_long: bool) -> Dict:
+        """Place take-profit order"""
+        side = "SELL" if is_long else "BUY"
+        return self.place_order(symbol, side, size, limit_price=price, reduce_only=True)
+
+    def get_account_state(self) -> Dict:
+        """Fetch account balance and open positions via POST (Hyperliquid uses POST for info)"""
+        try:
+            resp = self.session.post(
+                f"{self.base_url}/info",
+                json={
+                    'type': 'clearinghouseState',
+                    'user': self.account_address
+                },
+                timeout=10
+            )
+            if resp.status_code == 200:
+                state = resp.json()
                 return state
             else:
-                logger.error(f"Account fetch failed: {response.status_code}")
+                logger.error(f"Account fetch failed: {resp.status_code}")
                 return {}
         except Exception as e:
             logger.error(f"Account fetch exception: {e}")
@@ -759,11 +874,21 @@ class HyperliquidExecutor:
 
     def close_position(self, symbol: str) -> Dict:
         """Close all positions in a symbol"""
-        account_state = self.get_account_state()
-        
-        # Logic to identify position and close
-        # (Simplified - production would enumerate positions)
-        return {}
+        try:
+            state = self.get_account_state()
+            for pos in state.get('assetPositions', []):
+                position = pos.get('position', {})
+                if position.get('coin') == symbol:
+                    size = abs(float(position.get('szi', 0)))
+                    if size > 0:
+                        is_long = float(position.get('szi', 0)) > 0
+                        side = "SELL" if is_long else "BUY"
+                        return self.place_order(symbol, side, size, reduce_only=True)
+            logger.info(f"No position found for {symbol}")
+            return {}
+        except Exception as e:
+            logger.error(f"Close position exception: {e}")
+            return {}
 
 
 # ============================================================================
@@ -798,16 +923,18 @@ class RiskManager:
         return position_size
 
     def calculate_take_profit(self, entry_price: float, stop_loss_price: float,
-                            risk_reward: float = 2.0) -> float:
+                            risk_reward: float = 2.0, side: str = "LONG") -> float:
         """
         Set take profit based on risk/reward ratio.
-        
-        TP = Entry + (|Entry - SL| × RR)
+        For LONG: TP above entry. For SHORT: TP below entry.
         """
         pip_distance = abs(entry_price - stop_loss_price)
         tp_distance = pip_distance * risk_reward
         
-        tp_price = entry_price + tp_distance  # For long
+        if side == "LONG":
+            tp_price = entry_price + tp_distance
+        else:
+            tp_price = entry_price - tp_distance
         return tp_price
 
     def is_trade_valid(self, entry: float, sl: float, tp: float) -> Tuple[bool, str]:
@@ -840,11 +967,13 @@ class HyperliquidTradingBot:
     def __init__(self, config: Dict):
         self.config = config
         self.ta_engine = HighConfirmationTA()
-        self.macro_monitor = MacroLiquidityMonitor()
-        self.geo_monitor = GeopoliticalRiskMonitor()
 
         is_testnet = config.get('USE_TESTNET', False)
         dry_run = config.get('DRY_RUN', False)
+        api_url = hl_constants.TESTNET_API_URL if is_testnet else hl_constants.MAINNET_API_URL
+
+        self.macro_monitor = MacroLiquidityMonitor(api_url=api_url)
+        self.geo_monitor = GeopoliticalRiskMonitor()
 
         self.executor = HyperliquidExecutor(
             private_key=config['HYPERLIQUID_PRIVATE_KEY'],
@@ -862,6 +991,11 @@ class HyperliquidTradingBot:
         self.trades_executed = []
         self.is_testnet = is_testnet
         self.dry_run = dry_run
+
+        # Per-symbol TA engines for independent analysis
+        self.ta_engines: Dict[str, HighConfirmationTA] = {}
+        for sym in self.trading_symbols:
+            self.ta_engines[sym] = HighConfirmationTA()
 
         mode = "TESTNET" if is_testnet else "MAINNET"
         run_type = "DRY RUN" if dry_run else "LIVE"
@@ -881,7 +1015,7 @@ class HyperliquidTradingBot:
                 time.sleep(10)
 
     def _cycle(self):
-        """Single bot cycle: analyze, monitor, execute"""
+        """Single bot cycle: fetch data, analyze, execute"""
         
         # 1. UPDATE MACRO ENVIRONMENT
         macro_assessment = self.macro_monitor.assess_macro_regime()
@@ -891,21 +1025,42 @@ class HyperliquidTradingBot:
                    f"Risk Level: {macro_assessment['risk_level']} | "
                    f"Geo Risk: {geo_risk}")
         
-        # 2. FOR EACH SYMBOL, ANALYZE TA
+        # 2. FOR EACH SYMBOL, FETCH DATA AND ANALYZE TA
         for symbol in self.trading_symbols:
             
-            # Fetch latest price data (would connect to Hyperliquid WS in production)
-            # Simplified: Just log analysis
+            # Fetch live candle data from Hyperliquid
+            candles = self.executor.fetch_candles(symbol, interval="1m", count=200)
             
-            ta_signal = self.ta_engine.generate_signal()
+            if not candles:
+                logger.warning(f"{symbol}: No candle data available, skipping")
+                continue
+            
+            # Get or create per-symbol TA engine
+            ta = self.ta_engines.get(symbol, self.ta_engine)
+            
+            # Feed candles to TA engine
+            for c in candles:
+                ta.add_candle(
+                    timestamp=c['timestamp'],
+                    open_=c['open'],
+                    high=c['high'],
+                    low=c['low'],
+                    close=c['close'],
+                    volume=c['volume']
+                )
+            
+            ta_signal = ta.generate_signal()
+            
+            logger.info(f"{symbol}: Signal={ta_signal.signal.value}, "
+                       f"Confidence={ta_signal.confidence:.2%}, "
+                       f"Confirmations={ta_signal.confirmations}")
             
             # 3. FILTER BY MACRO CONDITIONS
-            #    Only trade if macro environment supports direction
             if macro_assessment['risk_level'] == 'CRITICAL':
                 logger.warning(f"Macro risk critical - skipping {symbol}")
                 continue
             
-            if ta_signal.signal == TradeSignal.NEUTRAL:
+            if ta_signal.signal == TradeSignal.NEUTRAL or ta_signal.signal == TradeSignal.WAIT:
                 logger.debug(f"{symbol}: Neutral signal, waiting")
                 continue
             
@@ -915,9 +1070,11 @@ class HyperliquidTradingBot:
                 continue
             
             # 5. EXECUTE TRADE
-            self._execute_trade_signal(symbol, ta_signal, macro_assessment)
+            current_price = candles[-1]['close']
+            self._execute_trade_signal(symbol, ta_signal, macro_assessment, current_price)
 
-    def _execute_trade_signal(self, symbol: str, signal: TechnicalSignal, macro: Dict):
+    def _execute_trade_signal(self, symbol: str, signal: TechnicalSignal,
+                              macro: Dict, current_price: float):
         """Execute a trade based on technical + macro confluence"""
         
         logger.info(f"\n{'='*60}")
@@ -925,22 +1082,22 @@ class HyperliquidTradingBot:
         logger.info(f"Confidence: {signal.confidence:.2%}")
         logger.info(f"Confirmations: {len(signal.confirmations)} - {signal.confirmations}")
         logger.info(f"Macro: {macro['regime']} (Risk: {macro['risk_level']})")
+        logger.info(f"Current Price: ${current_price:,.2f}")
         logger.info(f"{'='*60}\n")
         
-        # Define entry, SL, TP based on signal
-        # (Simplified - production would use actual market data)
-        
-        entry_price = 100.0  # Placeholder
+        entry_price = current_price
         
         if signal.signal == TradeSignal.LONG:
             sl_price = signal.support_level * 0.98  # 2% below support
             leverage = 2.0 if macro['regime'] == 'BULLISH' else 1.0
+            side = "LONG"
         else:
             sl_price = signal.resistance_level * 1.02  # 2% above resistance
             leverage = 2.0 if macro['regime'] == 'BEARISH' else 1.0
+            side = "SHORT"
         
         tp_price = self.risk_manager.calculate_take_profit(
-            entry_price, sl_price, risk_reward=2.5
+            entry_price, sl_price, risk_reward=2.5, side=side
         )
         
         # Validate
@@ -955,29 +1112,39 @@ class HyperliquidTradingBot:
             entry_price, sl_price, leverage
         )
         
-        logger.info(f"Entry: {entry_price} | SL: {sl_price} | TP: {tp_price}")
-        logger.info(f"Position Size: ${position_size:,.2f} | Leverage: {leverage}x")
+        # Convert USD position size to coin units
+        coin_size = position_size / entry_price if entry_price > 0 else 0
         
-        # TODO: Execute on Hyperliquid (commented for safety)
-        # self.executor.place_order(
-        #     symbol=symbol,
-        #     side="BUY" if signal.signal == TradeSignal.LONG else "SELL",
-        #     size=position_size,
-        #     leverage=leverage
-        # )
+        logger.info(f"Entry: ${entry_price:,.2f} | SL: ${sl_price:,.2f} | TP: ${tp_price:,.2f}")
+        logger.info(f"Position Size: ${position_size:,.2f} ({coin_size:.6f} {symbol}) | Leverage: {leverage}x")
+        
+        # Execute order
+        order_side = "BUY" if signal.signal == TradeSignal.LONG else "SELL"
+        result = self.executor.place_order(
+            symbol=symbol,
+            side=order_side,
+            size=round(coin_size, 6),
+            leverage=leverage
+        )
+        
+        if result:
+            logger.info(f"Order result: {result}")
         
         # Log trade
         trade_record = {
-            'timestamp': datetime.now(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'symbol': symbol,
             'signal': signal.signal.value,
             'confidence': signal.confidence,
             'entry': entry_price,
             'sl': sl_price,
             'tp': tp_price,
-            'size': position_size,
+            'size_usd': position_size,
+            'size_coin': coin_size,
+            'leverage': leverage,
             'macro_regime': macro['regime'],
-            'macro_risk': macro['risk_level']
+            'macro_risk': macro['risk_level'],
+            'order_result': str(result)
         }
         self.trades_executed.append(trade_record)
 
@@ -1000,6 +1167,7 @@ class HyperliquidTradingBot:
             'avg_confidence': df['confidence'].mean(),
             'macro_bullish_trades': len(df[df['macro_regime'] == 'BULLISH']),
             'macro_bearish_trades': len(df[df['macro_regime'] == 'BEARISH']),
+            'symbols_traded': df['symbol'].unique().tolist() if 'symbol' in df.columns else [],
         }
 
 
@@ -1032,6 +1200,7 @@ def main():
     logger.info(f"{'='*70}")
     logger.info(f"Mode: {mode}")
     logger.info(f"Type: {run_type}")
+    logger.info(f"Account: {config['HYPERLIQUID_ACCOUNT']}")
     logger.info(f"Account Size: ${config['ACCOUNT_SIZE']:,.2f}")
     logger.info(f"Max Loss Per Trade: {config['MAX_LOSS_PER_TRADE']*100:.1f}%")
     logger.info(f"Symbols: {', '.join(config['SYMBOLS'])}")
@@ -1040,7 +1209,23 @@ def main():
 
     bot = HyperliquidTradingBot(config)
 
-    logger.info("Running bot in single cycle test mode")
+    # Check account state first
+    state = bot.executor.get_account_state()
+    if state:
+        margin = state.get('marginSummary', {})
+        acct_value = float(margin.get('accountValue', 0))
+        logger.info(f"Account Value: ${acct_value:,.2f}")
+        positions = [p for p in state.get('assetPositions', []) 
+                     if float(p.get('position', {}).get('szi', 0)) != 0]
+        if positions:
+            logger.info(f"Open Positions: {len(positions)}")
+            for p in positions:
+                pos = p['position']
+                logger.info(f"  {pos['coin']}: {pos['szi']} @ {pos.get('entryPx', 'N/A')}")
+        else:
+            logger.info("No open positions")
+    
+    logger.info("\nRunning single cycle...")
     bot._cycle()
 
     summary = bot.get_performance_summary()

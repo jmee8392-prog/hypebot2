@@ -74,7 +74,7 @@ def test_testnet_unified_account():
         assert bot.executor.account_type == "unified", "Should use unified account"
 
         logger.info(f"Executor Account Type: {bot.executor.account_type}")
-        logger.info(f"Executor API URL: {bot.executor.api_url}")
+        logger.info(f"Executor API URL: {bot.executor.base_url}")
 
         bot._cycle()
 

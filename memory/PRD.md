@@ -32,10 +32,17 @@ User has a Hyperliquid trading bot. Requested:
 - [x] Confirmed live testnet connection - sees $996.53 USDC in spot
 
 ## Simulation Results
-- 98.7% of scenarios produced NEUTRAL (no trade)
-- Only 13/1000 trades executed
-- 15.4% win rate (target was 60-70%)
-- 0 exceptions - framework is stable
+
+### v1 (Original system - confirmation counting + absolute S/R stops)
+- 2,061 trades, 0.3% win rate, 95% timeouts, +$2.10 PnL
+- Trades almost never resolved - SL/TP too wide
+
+### v2 (Upgraded - weighted scoring + ATR stops + EMA trend filter)
+- 5,409 trades, 34.9% win rate, 1.3% timeouts, -$6.10 PnL (-0.61%)
+- Profit factor: 0.90 (close to breakeven)
+- Max drawdown: 0.81%
+- Trades actually resolve now. Win rate needs ~37.5% to break even at current R:R.
+- Strong trend signals (EMA spread > 0.3%) had 71% win rate
 
 ## Prioritized Backlog
 

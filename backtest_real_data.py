@@ -72,81 +72,11 @@ def generate_signal_tuned(ta: HighConfirmationTA,
                           min_confirmations: int = 3,
                           min_strength: int = 2) -> TechnicalSignal:
     """
-    Same logic as HighConfirmationTA.generate_signal() but with
-    configurable thresholds for backtesting different parameters.
+    Uses the upgraded weighted scoring system from generate_signal().
+    min_confirmations/min_strength are ignored in v2 - kept for API compat.
+    The new system uses weighted scores >= 0.55 with EMA trend gate.
     """
-    if len(ta.price_data) < 30:
-        return TechnicalSignal(
-            signal=TradeSignal.WAIT, confidence=0.0, timeframe="",
-            confirmations=[], resistance_level=0, support_level=0
-        )
-
-    confirmations = []
-    signal_strength = 0
-
-    rsi = ta.calculate_rsi()
-    if rsi < 30:
-        confirmations.append("RSI_OVERSOLD")
-        signal_strength += 1
-    elif rsi > 70:
-        confirmations.append("RSI_OVERBOUGHT")
-        signal_strength -= 1
-
-    macd, signal, histogram = ta.calculate_macd()
-    if histogram > 0 and macd > signal:
-        confirmations.append("MACD_BULLISH_CROSS")
-        signal_strength += 1
-    elif histogram < 0 and macd < signal:
-        confirmations.append("MACD_BEARISH_CROSS")
-        signal_strength -= 1
-
-    structure = ta.detect_structure_breaks()
-    if structure['uptrend']:
-        confirmations.append("STRUCTURE_UPTREND")
-        signal_strength += 1
-    elif structure['downtrend']:
-        confirmations.append("STRUCTURE_DOWNTREND")
-        signal_strength -= 1
-
-    upper, mid, lower = ta.calculate_bollinger_bands()
-    current_price = ta.price_data[-1]['close']
-    if current_price < lower:
-        confirmations.append("BB_LOWER_TOUCH")
-        signal_strength += 1
-    elif current_price > upper:
-        confirmations.append("BB_UPPER_TOUCH")
-        signal_strength -= 1
-
-    flow = ta.analyze_order_flow()
-    if flow['buy_pressure'] > 0.65:
-        confirmations.append("ORDERFLOW_BULLISH")
-        signal_strength += 1
-    elif flow['sell_pressure'] > 0.65:
-        confirmations.append("ORDERFLOW_BEARISH")
-        signal_strength -= 1
-
-    liquidity = ta.detect_liquidity_voids()
-
-    if len(confirmations) >= min_confirmations:
-        if signal_strength >= min_strength:
-            final_signal = TradeSignal.LONG
-            confidence = min(0.95, 0.60 + (len(confirmations) * 0.10))
-        elif signal_strength <= -min_strength:
-            final_signal = TradeSignal.SHORT
-            confidence = min(0.95, 0.60 + (len(confirmations) * 0.10))
-        else:
-            final_signal = TradeSignal.NEUTRAL
-            confidence = 0.50
-    else:
-        final_signal = TradeSignal.NEUTRAL
-        confidence = 0.30
-
-    return TechnicalSignal(
-        signal=final_signal, confidence=confidence,
-        timeframe="", confirmations=confirmations,
-        resistance_level=liquidity['resistance'],
-        support_level=liquidity['support']
-    )
+    return ta.generate_signal()
 
 
 # ============================================================================
@@ -240,8 +170,8 @@ def run_backtest(candles: List[Dict], coin: str,
 
         total_windows += 1
 
-        # Generate signal with tuned thresholds
-        signal = generate_signal_tuned(ta, min_confirmations, min_strength)
+        # Generate signal with new weighted system
+        signal = generate_signal_tuned(ta)
 
         if signal.signal in (TradeSignal.NEUTRAL, TradeSignal.WAIT):
             signals_neutral += 1
@@ -251,22 +181,29 @@ def run_backtest(candles: List[Dict], coin: str,
             signals_low_conf += 1
             continue
 
-        # Calculate trade parameters
+        # Calculate trade parameters using ATR-based stops
         entry_price = window[-1]['close']
         side = "LONG" if signal.signal == TradeSignal.LONG else "SHORT"
+        
+        atr = ta.calculate_atr(period=14)
+        if atr <= 0:
+            signals_invalid += 1
+            continue
 
+        # ATR-based SL/TP: SL = 1.5x ATR, TP = 2.5x ATR
         if side == "LONG":
-            sl_price = signal.support_level * 0.98
+            sl_price = entry_price - (atr * 1.5)
+            tp_price = entry_price + (atr * 2.5)
             leverage = 2.0
         else:
-            sl_price = signal.resistance_level * 1.02
+            sl_price = entry_price + (atr * 1.5)
+            tp_price = entry_price - (atr * 2.5)
             leverage = 2.0
 
         if sl_price <= 0 or entry_price <= 0:
             signals_invalid += 1
             continue
 
-        tp_price = risk_mgr.calculate_take_profit(entry_price, sl_price, risk_reward=2.5, side=side)
         is_valid, _ = risk_mgr.is_trade_valid(entry_price, sl_price, tp_price)
         if not is_valid:
             signals_invalid += 1

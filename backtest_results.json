@@ -1,29 +1,29 @@
 {
-  "backtest_date": "2026-03-26T07:05:13.523600+00:00",
+  "backtest_date": "2026-03-26T07:10:57.588978+00:00",
   "data_source": "Hyperliquid mainnet",
   "account_size": 1000.0,
   "conservative": {
-    "trades": 2061,
-    "win_rate": 0.3396409509946628,
-    "total_pnl": 2.100541766562194,
-    "profit_factor": 0.3043267577218152,
-    "max_drawdown": 0.11411177602154204,
-    "final_balance": 1002.1005417665622
+    "trades": 4482,
+    "win_rate": 34.33734939759036,
+    "total_pnl": -6.927796361268134,
+    "profit_factor": 0.8679192264598122,
+    "max_drawdown": 0.8578900612624658,
+    "final_balance": 993.0722036387318
   },
   "tuned": {
-    "trades": 7965,
-    "win_rate": 0.42686754551161327,
-    "total_pnl": 4.043299491457108,
-    "profit_factor": 0.21353781080018971,
-    "max_drawdown": 0.3532931835198821,
-    "final_balance": 1004.0432994914571
+    "trades": 4557,
+    "win_rate": 34.34276936581084,
+    "total_pnl": -7.182921611655303,
+    "profit_factor": 0.8657879067533121,
+    "max_drawdown": 0.8832003472569153,
+    "final_balance": 992.8170783883447
   },
   "aggressive": {
-    "trades": 7965,
-    "win_rate": 0.42686754551161327,
-    "total_pnl": 4.043299491457108,
-    "profit_factor": 0.21353781080018971,
-    "max_drawdown": 0.3532931835198821,
-    "final_balance": 1004.0432994914571
+    "trades": 5409,
+    "win_rate": 34.90478831577001,
+    "total_pnl": -6.102830193844058,
+    "profit_factor": 0.9028246963017116,
+    "max_drawdown": 0.8069713742594886,
+    "final_balance": 993.897169806156
   }
 }

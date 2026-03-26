@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-sys.path.insert(0, '/tmp/cc-agent/65059804/project')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from hyperliquid_trading_bot import HyperliquidTradingBot
 

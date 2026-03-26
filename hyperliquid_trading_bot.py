@@ -47,7 +47,10 @@ def _patched_info_init(self, base_url=None, skip_ws=False, meta=None, spot_meta=
         self.coin_to_name = {}
         if meta:
             for idx, asset_info in enumerate(meta.get('universe', [])):
-                self.coin_to_asset[asset_info['name']] = idx
+                name = asset_info['name']
+                self.coin_to_asset[name] = idx
+                self.name_to_coin[name] = name
+                self.coin_to_name[name] = name
         self.ws_manager = None
         self.ws = None
         self.timeout = timeout
@@ -715,6 +718,10 @@ class HyperliquidExecutor:
                 )
                 if meta_resp.status_code == 200:
                     self.meta = meta_resp.json()
+                    # Build sz_decimals lookup for tick size rounding
+                    self.sz_decimals = {}
+                    for u in self.meta.get('universe', []):
+                        self.sz_decimals[u['name']] = u.get('szDecimals', 2)
                     self.exchange = HLExchange(
                         wallet=self.wallet,
                         base_url=self.base_url,
@@ -776,6 +783,15 @@ class HyperliquidExecutor:
             logger.error(f"Candle fetch exception: {e}")
             return []
 
+    def _round_size(self, symbol: str, size: float) -> float:
+        """Round order size to the symbol's szDecimals"""
+        decimals = self.sz_decimals.get(symbol, 2) if hasattr(self, 'sz_decimals') else 2
+        return round(size, decimals)
+
+    def _round_price(self, price: float) -> float:
+        """Round price to whole dollar (Hyperliquid tick size)"""
+        return round(price)
+
     def place_order(self, symbol: str, side: str, size: float,
                    limit_price: Optional[float] = None,
                    leverage: float = 1.0,
@@ -803,22 +819,24 @@ class HyperliquidExecutor:
                 return None
 
             is_buy = side.upper() == "BUY"
+            rounded_size = self._round_size(symbol, size)
 
             if limit_price:
+                rounded_price = self._round_price(limit_price)
                 order_type = {"limit": {"tif": "Gtc"}}
-                result = self.exchange.order(symbol, is_buy, size, limit_price, order_type, reduce_only=reduce_only)
+                result = self.exchange.order(symbol, is_buy, rounded_size, rounded_price, order_type, reduce_only=reduce_only)
             else:
                 # Market order: use aggressive limit with IOC
                 order_type = {"limit": {"tif": "Ioc"}}
                 current_price = self._get_mid_price(symbol)
                 if current_price:
-                    aggressive_px = current_price * (1.005 if is_buy else 0.995)
-                    result = self.exchange.order(symbol, is_buy, size, aggressive_px, order_type, reduce_only=reduce_only)
+                    aggressive_px = self._round_price(current_price * (1.005 if is_buy else 0.995))
+                    result = self.exchange.order(symbol, is_buy, rounded_size, aggressive_px, order_type, reduce_only=reduce_only)
                 else:
                     logger.error("Cannot get current price for market order")
                     return None
 
-            logger.info(f"Order placed: {symbol} {side} {size} @ {limit_price} -> {result}")
+            logger.info(f"Order placed: {symbol} {side} {rounded_size} @ {limit_price} -> {result}")
             return result
 
         except Exception as e:
@@ -1236,12 +1254,17 @@ def main():
         margin = state.get('marginSummary', {})
         perps_value = float(margin.get('accountValue', 0))
         spot_usdc = state.get('spotUsdcBalance', 0)
+        total_value = perps_value + spot_usdc
         
-        logger.info(f"Perps Account Value: ${perps_value:,.2f}")
-        if spot_usdc > 0:
-            logger.info(f"Spot USDC Balance: ${spot_usdc:,.2f}")
-            logger.info(f"NOTE: Transfer USDC from spot to perps to trade. "
-                       f"Go to testnet.hyperliquid.xyz -> Portfolio -> Transfer")
+        if config['USE_TESTNET'] and spot_usdc > 0:
+            logger.info(f"Unified Account Balance: ${total_value:,.2f} "
+                       f"(Perps: ${perps_value:,.2f} + Spot USDC: ${spot_usdc:,.2f})")
+            # Update account size to actual balance if it was default
+            if config['ACCOUNT_SIZE'] == 10000 and total_value > 0:
+                bot.risk_manager.account_size = total_value
+                logger.info(f"Account size updated to actual balance: ${total_value:,.2f}")
+        else:
+            logger.info(f"Account Value: ${perps_value:,.2f}")
         
         positions = [p for p in state.get('assetPositions', []) 
                      if float(p.get('position', {}).get('szi', 0)) != 0]

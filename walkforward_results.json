@@ -1,0 +1,130 @@
+{
+  "date": "2026-03-26T07:21:37.172325+00:00",
+  "execution_model": {
+    "slippage_bps": 3.0,
+    "taker_fee_bps": 2.5,
+    "funding_rate_8h": 8e-05
+  },
+  "walk_forward": {
+    "train_days": 14,
+    "test_days": 7,
+    "folds": 5,
+    "total_trades": 463,
+    "total_pnl": 0.05117707599539171,
+    "avg_sharpe": -0.6558043375963611,
+    "profitable_folds": 3,
+    "max_drawdown": 0.0068994876953865966
+  },
+  "by_regime": {
+    "BEAR_STEADY": {
+      "trades": 141,
+      "wins": 36,
+      "pnl": -0.062379397993282154,
+      "folds": 2
+    },
+    "CRAB": {
+      "trades": 222,
+      "wins": 115,
+      "pnl": 0.14590704905332386,
+      "folds": 2
+    },
+    "BULL_STEADY": {
+      "trades": 100,
+      "wins": 26,
+      "pnl": -0.03235057506464999,
+      "folds": 1
+    }
+  },
+  "fold_details": [
+    {
+      "trades": 73,
+      "wins": 8,
+      "losses": 62,
+      "timeouts": 3,
+      "win_rate": 10.95890410958904,
+      "total_pnl": -0.0689948769535744,
+      "total_funding_cost": 0.00014258445053102323,
+      "pnl_after_funding": -0.0689948769535744,
+      "profit_factor": 0.19253355136728745,
+      "sharpe": -13.142435714266666,
+      "sortino": -91.61922392947484,
+      "max_drawdown": 0.0068994876953865966,
+      "final_balance": 999.9310051230461,
+      "killed": false,
+      "regime": "BEAR_STEADY",
+      "fold": 1
+    },
+    {
+      "trades": 105,
+      "wins": 56,
+      "losses": 49,
+      "timeouts": 0,
+      "win_rate": 53.333333333333336,
+      "total_pnl": 0.06226827687693235,
+      "total_funding_cost": -6.674153689791913e-05,
+      "pnl_after_funding": 0.06226827687693235,
+      "profit_factor": 1.9665208215881593,
+      "sharpe": 5.273638204708586,
+      "sortino": 236.89102836092815,
+      "max_drawdown": 0.0030090033829927457,
+      "final_balance": 1000.0622682768769,
+      "killed": false,
+      "regime": "CRAB",
+      "fold": 2
+    },
+    {
+      "trades": 117,
+      "wins": 59,
+      "losses": 43,
+      "timeouts": 15,
+      "win_rate": 50.427350427350426,
+      "total_pnl": 0.08363877217639151,
+      "total_funding_cost": -0.0009982126901208986,
+      "pnl_after_funding": 0.08363877217639151,
+      "profit_factor": 2.2797180634441814,
+      "sharpe": 7.147208076569329,
+      "sortino": 121.9908248003325,
+      "max_drawdown": 0.0021702384227949697,
+      "final_balance": 1000.0836387721764,
+      "killed": false,
+      "regime": "CRAB",
+      "fold": 3
+    },
+    {
+      "trades": 100,
+      "wins": 26,
+      "losses": 67,
+      "timeouts": 7,
+      "win_rate": 26.0,
+      "total_pnl": -0.03235057506464999,
+      "total_funding_cost": -0.0002739080600232902,
+      "pnl_after_funding": -0.03235057506464999,
+      "profit_factor": 0.5985792267548158,
+      "sharpe": -3.477854599956089,
+      "sortino": -34.400887993941005,
+      "max_drawdown": 0.005285330470780991,
+      "final_balance": 999.9676494249343,
+      "killed": false,
+      "regime": "BULL_STEADY",
+      "fold": 4
+    },
+    {
+      "trades": 68,
+      "wins": 28,
+      "losses": 40,
+      "timeouts": 0,
+      "win_rate": 41.17647058823529,
+      "total_pnl": 0.006615478960292245,
+      "total_funding_cost": -0.0002831846358529874,
+      "pnl_after_funding": 0.006615478960292245,
+      "profit_factor": 1.1266200059115665,
+      "sharpe": 0.9204223449630349,
+      "sortino": 40.928982842652964,
+      "max_drawdown": 0.004460149821639132,
+      "final_balance": 1000.0066154789605,
+      "killed": false,
+      "regime": "BEAR_STEADY",
+      "fold": 5
+    }
+  ]
+}
